@@ -59,6 +59,31 @@ local DIALOG_LAYOUT = {
 
 --[[----------------------------------------------------------------]]
 
+---@class gizmo
+---@field hover number
+---@field focus number
+gizmo = {
+	__meta = {}
+}
+
+---Create a new gizmo.
+---@return gizmo value # The gizmo.
+function gizmo:new()
+	local i = {}
+	setmetatable(i, self.__meta)
+	getmetatable(i).__index = self
+
+	--[[]]
+
+	i.__type = "gizmo"
+	i.hover  = 0.0
+	i.focus  = 0.0
+
+	return i
+end
+
+--[[----------------------------------------------------------------]]
+
 ---@class dialog
 ---@field active boolean
 ---@field window window
@@ -89,8 +114,167 @@ function dialog:new()
 	i.weapon     = { 1.0, 2.0 }
 	i.ability    = { 1.0, 2.0 }
 	i.item       = { nil, nil }
+	i.data       = {}
 
 	return i
+end
+
+local function gizmo_data(self, label, hover, index, focus)
+	local delta = quiver.general.get_frame_time()
+
+	if not self.data[label] then
+		self.data[label] = gizmo:new()
+	end
+
+	local data = self.data[label]
+
+	data.hover = math.clamp(0.0, 1.0,
+		data.hover + ((hover or index) and delta * 8.0 or delta * -8.0))
+	data.focus = math.clamp(0.0, 1.0,
+		data.focus + (focus and delta * 8.0 or delta * -8.0))
+
+	return data
+end
+
+local function button_call_back(status, window, shape, hover, index, focus, label)
+	local gizmo = gizmo_data(status.dialog, label, hover, index, focus)
+	local color = color:white() * (gizmo.hover * 0.5 + 0.5)
+
+	local font = status.system:get_font("video/font_side.ttf")
+	font:draw(label, vector_2:old(shape.x, shape.y), 24.0, 1.0, color)
+
+	if hover or index then
+		do end
+	end
+end
+
+local function dialog_button(status, shape, label, flag)
+	return status.dialog.window:button(shape, label, flag, button_call_back, status)
+end
+
+local function toggle_call_back(status, window, shape, hover, index, focus, label, value)
+	local gizmo = gizmo_data(status.dialog, label, hover, index, focus)
+	local color = color:white() * (gizmo.hover * 0.5 + 0.5)
+
+	-- draw border.
+	quiver.draw_2d.draw_box_2_round(shape, 0.25, 4.0, color * 0.5)
+
+	if value then
+		quiver.draw_2d.draw_box_2_round(box_2:old(shape.x + 4.0, shape.y + 4.0, shape.width - 8.0, shape.height - 8.0),
+			0.25,
+			4.0, color)
+	end
+
+	local font = status.system:get_font("video/font_side.ttf")
+	font:draw(label, vector_2:old(shape.x + shape.width + 4.0, shape.y + shape.height * 0.5 - 12.0), 24.0, 1.0, color)
+
+	if hover or index then
+		do end
+	end
+end
+
+local function dialog_toggle(status, shape, label, value, flag)
+	return status.dialog.window:toggle(shape, label, value, flag, toggle_call_back, status)
+end
+
+local function slider_call_back(status, window, shape, hover, index, focus, label, value, percentage)
+	local gizmo = gizmo_data(status.dialog, label, hover, index, focus)
+	local color = color:white() * (gizmo.hover * 0.5 + 0.5)
+
+	-- draw border.
+	quiver.draw_2d.draw_box_2_round(shape, 0.25, 4.0, color * 0.5)
+	quiver.draw_2d.draw_box_2_round(
+		box_2:old(shape.x + 4.0, shape.y + 4.0, (shape.width - 8.0) * percentage, shape.height - 8.0), 0.25, 4.0,
+		color)
+
+	local font = status.system:get_font("video/font_side.ttf")
+	font:draw(label, vector_2:old(shape.x + shape.width + 4.0, shape.y + shape.height * 0.5 - 12.0), 24.0, 1.0, color)
+
+	-- measure text.
+	local measure = font:measure_text(value, 24.0, 1.0)
+
+	-- draw value.
+	font:draw(value, vector_2:old(shape.x + (shape.width * 0.5) - (measure * 0.5), shape.y + 4.0),
+		24.0,
+		1.0,
+		color:black())
+
+	if hover or index then
+		do end
+	end
+end
+
+local function dialog_slider(status, shape, label, value, min, max, step, flag)
+	return status.dialog.window:slider(shape, label, value, min, max, step, flag, slider_call_back, status)
+end
+
+--[[]]
+
+local function switch_call_back(status, window, shape, hover, index, focus, label, value)
+	local gizmo = gizmo_data(status.dialog, label, hover, index, focus)
+	local color = color:white() * (gizmo.hover * 0.5 + 0.5)
+
+	-- draw border.
+	quiver.draw_2d.draw_box_2_round(shape, 0.25, 4.0, color * 0.5)
+
+	local font = status.system:get_font("video/font_side.ttf")
+	font:draw(label, vector_2:old(shape.x + shape.width + 4.0, shape.y + shape.height * 0.5 - 12.0), 24.0, 1.0, color)
+
+	-- measure text.
+	local measure = font:measure_text(value, 24.0, 1.0)
+
+	-- draw value.
+	font:draw(value, vector_2:old(shape.x + (shape.width * 0.5) - (measure * 0.5), shape.y + 4.0),
+		24.0,
+		1.0,
+		color:black())
+
+	if hover or index then
+		do end
+	end
+end
+
+local function dialog_switch(status, shape, label, value, pool, flag)
+	return status.dialog.window:switch(shape, label, value, pool, flag, switch_call_back, status)
+end
+
+--[[]]
+
+local function action_call_back(status, window, shape, hover, index, focus, label, value)
+	local gizmo = gizmo_data(status.dialog, label, hover, index, focus)
+	local color = color:white() * (gizmo.hover * 0.5 + 0.5)
+
+	-- draw border.
+	quiver.draw_2d.draw_box_2_round(shape, 0.25, 4.0, color * 0.5)
+
+	local font = status.system:get_font("video/font_side.ttf")
+	font:draw(label, vector_2:old(shape.x + shape.width + 4.0, shape.y + shape.height * 0.5 - 12.0), 24.0, 1.0, color)
+
+	local label = #value.list > 0.0 and "" or "N/A"
+
+	-- for every button in the action's list...
+	for i, button in ipairs(value.list) do
+		-- concatenate the button's name.
+		label = label .. (i > 1.0 and ": " or "")
+			.. button:name()
+	end
+
+	-- measure text.
+	local measure = font:measure_text(label, 24.0, 1.0)
+
+	-- draw value.
+	font:draw(label, vector_2:old(shape.x + (shape.width * 0.5) - (measure * 0.5), shape.y + 4.0),
+		24.0,
+		1.0,
+		color:black())
+
+	if hover or index then
+		do end
+	end
+end
+
+local function dialog_action(status, shape, label, value, clamp, flag)
+	return status.dialog.window:action(shape, label, value, clamp, flag, action_call_back, status)
 end
 
 ---Draw a return button header, as well as check for a dialog toggle.
@@ -99,7 +283,7 @@ end
 ---@param former dialog_layout # The former dialog layout.
 local function header_return(self, status, former)
 	-- if button is set off or the return action has been set off...
-	if self.window:button(box_2:old(8.0, 8.0, 142.0, 32.0), "Return") or ACTION_RETURN:press(self.window.device) then
+	if dialog_button(status, box_2:old(8.0, 8.0, 142.0, 32.0), "Return") or ACTION_RETURN:press(self.window.device) then
 		-- set the current layout to the former layout.
 		self.layout = former
 	end
@@ -115,11 +299,6 @@ local function camera_ease(self, status, point, focus)
 
 	self.ease_point:copy(self.ease_point + (point - status.camera_3d.point) * delta * 8.0)
 	self.ease_focus:copy(self.ease_focus + (focus - status.camera_3d.focus) * delta * 8.0)
-end
-
-local function call_back(self, window, shape, hover, index, focus, label)
-	-- draw border.
-	quiver.draw_2d.draw_box_2_border(shape, focus)
 end
 
 ---Layout: main.
@@ -142,33 +321,33 @@ local function layout_main(self, status)
 	end
 
 	if not status.map then
-		if self.window:button(box_2:old(8.0, 8.0 + 36.0 * y, 192.0, 32.0), "Mission", nil, call_back) then
+		if dialog_button(status, box_2:old(8.0, 12.0 + 32.0 * y, 192.0, 32.0), "Mission") then
 			self.layout = DIALOG_LAYOUT.MISSION
 			self.window.index = 0.0
 		end; y = y + 1.0
-		if self.window:button(box_2:old(8.0, 8.0 + 36.0 * y, 192.0, 32.0), "Hunter Cust.") then
+		if dialog_button(status, box_2:old(8.0, 12.0 + 32.0 * y, 192.0, 32.0), "Hunter Cust.") then
 			self.layout = DIALOG_LAYOUT.HUNTER
 			self.window.index = 0.0
 		end; y = y + 1.0
-		if self.window:button(box_2:old(8.0, 8.0 + 36.0 * y, 192.0, 32.0), "Weapon Cust.") then
+		if dialog_button(status, box_2:old(8.0, 12.0 + 32.0 * y, 192.0, 32.0), "Weapon Cust.") then
 			self.layout = DIALOG_LAYOUT.WEAPON
 			self.window.index = 0.0
 		end; y = y + 1.0
-		if self.window:button(box_2:old(8.0, 8.0 + 36.0 * y, 192.0, 32.0), "Ability Cust.") then
+		if dialog_button(status, box_2:old(8.0, 12.0 + 32.0 * y, 192.0, 32.0), "Ability Cust.") then
 			self.layout = DIALOG_LAYOUT.ABILITY
 			self.window.index = 0.0
 		end; y = y + 1.0
-		if self.window:button(box_2:old(8.0, 8.0 + 36.0 * y, 192.0, 32.0), "Item Store") then
+		if dialog_button(status, box_2:old(8.0, 12.0 + 32.0 * y, 192.0, 32.0), "Item Store") then
 			self.layout = DIALOG_LAYOUT.ITEM
 			self.window.index = 0.0
 		end; y = y + 1.0
 	end
 
-	if self.window:button(box_2:old(8.0, 8.0 + 36.0 * y, 192.0, 32.0), "Configuration") then
+	if dialog_button(status, box_2:old(8.0, 12.0 + 32.0 * y, 192.0, 32.0), "Configuration") then
 		self.layout = DIALOG_LAYOUT.CONFIGURATION
 		self.window.index = 0.0
 	end; y = y + 1.0
-	if self.window:button(box_2:old(8.0, 8.0 + 36.0 * y, 192.0, 32.0), "Editor") then
+	if dialog_button(status, box_2:old(8.0, 12.0 + 32.0 * y, 192.0, 32.0), "Editor") then
 		self.layout = DIALOG_LAYOUT.EDITOR
 		self.window.index = 0.0
 
@@ -179,7 +358,7 @@ local function layout_main(self, status)
 		status.camera_3d.zoom = 90.0
 		status.camera_3d.kind = 1.0
 	end; y = y + 1.0
-	if self.window:button(box_2:old(8.0, 8.0 + 36.0 * y, 192.0, 32.0), "Exit") then
+	if dialog_button(status, box_2:old(8.0, 12.0 + 32.0 * y, 192.0, 32.0), "Exit") then
 		self.layout = DIALOG_LAYOUT.EXIT
 		self.window.index = 0.0
 	end; y = y + 1.0
@@ -217,7 +396,7 @@ local function layout_mission(self, status)
 	for i, j in ipairs(status.ability) do table.insert(table_ability, "Ability #" .. i) end
 	for i, j in ipairs(status.item) do table.insert(table_item, j.name) end
 
-	self.hunter = self.window:switch(box_2:old(8.0, 8.0 + 36.0 * y, 288.0, 32.0), "Select Hunter",
+	self.hunter = dialog_switch(status, box_2:old(8.0, 8.0 + 36.0 * y, 288.0, 32.0), "Select Hunter",
 		self.hunter, table_hunter); y = y + 1.0
 
 	local click_a = false
@@ -225,10 +404,10 @@ local function layout_mission(self, status)
 
 	--[[ weapon selection. ]]
 
-	self.weapon[1], click_a = self.window:switch(box_2:old(8.0, 8.0 + 36.0 * y, 288.0, 32.0), "Select Weapon A",
+	self.weapon[1], click_a = dialog_switch(status, box_2:old(8.0, 8.0 + 36.0 * y, 288.0, 32.0), "Select Weapon A",
 		self.weapon[1], table_weapon); y = y + 1.0
 
-	self.weapon[2], click_b = self.window:switch(box_2:old(8.0, 8.0 + 36.0 * y, 288.0, 32.0), "Select Weapon B",
+	self.weapon[2], click_b = dialog_switch(status, box_2:old(8.0, 8.0 + 36.0 * y, 288.0, 32.0), "Select Weapon B",
 		self.weapon[2], table_weapon); y = y + 1.0
 
 	-- solve an equipment collision, if any.
@@ -236,10 +415,10 @@ local function layout_mission(self, status)
 
 	--[[ ability selection. ]]
 
-	self.ability[1], click_a = self.window:switch(box_2:old(8.0, 8.0 + 36.0 * y, 288.0, 32.0), "Select Ability A",
+	self.ability[1], click_a = dialog_switch(status, box_2:old(8.0, 8.0 + 36.0 * y, 288.0, 32.0), "Select Ability A",
 		self.ability[1], table_ability); y = y + 1.0
 
-	self.ability[2], click_b = self.window:switch(box_2:old(8.0, 8.0 + 36.0 * y, 288.0, 32.0), "Select Ability B",
+	self.ability[2], click_b = dialog_switch(status, box_2:old(8.0, 8.0 + 36.0 * y, 288.0, 32.0), "Select Ability B",
 		self.ability[2], table_ability); y = y + 1.0
 
 	-- solve an equipment collision, if any.
@@ -256,13 +435,13 @@ local function layout_mission(self, status)
 	end
 
 	if self.item[1] then
-		self.item[1], click_a = self.window:switch(box_2:old(8.0, 8.0 + 36.0 * y, 288.0, 32.0),
+		self.item[1], click_a = dialog_switch(status, box_2:old(8.0, 8.0 + 36.0 * y, 288.0, 32.0),
 			"Select Item A",
 			self.item[1], table_item); y = y + 1.0
 	end
 
 	if self.item[2] then
-		self.item[2], click_b = self.window:switch(box_2:old(8.0, 8.0 + 36.0 * y, 288.0, 32.0),
+		self.item[2], click_b = dialog_switch(status, box_2:old(8.0, 8.0 + 36.0 * y, 288.0, 32.0),
 			"Select Item B",
 			self.item[2], table_item); y = y + 1.0
 	end
@@ -272,7 +451,7 @@ local function layout_mission(self, status)
 		equip_collision(self.item, status.item, click_a, click_b)
 	end
 
-	if self.window:button(box_2:old(8.0, 8.0 + 36.0 * y, 192.0, 32.0), "GO!") then
+	if dialog_button(status, box_2:old(8.0, 8.0 + 36.0 * y, 192.0, 32.0), "GO!") then
 		status:initialize_map("video/test.glb")
 	end; y = y + 1.0
 
@@ -314,14 +493,14 @@ local function layout_item(self, status)
 
 	local y = 1.0
 
-	if self.window:button(box_2:old(8.0, 8.0 + 36.0 * y, 264.0, 32.0), "Buy Heal Item ($50)") then
+	if dialog_button(status, box_2:old(8.0, 8.0 + 36.0 * y, 264.0, 32.0), "Buy Heal Item ($50)") then
 		if status.credit >= 50.0 then
 			table.insert(status.item, item:new(status, "Heal Item"))
 			status.credit = status.credit - 50.0
 		end
 	end; y = y + 1.0
 
-	if self.window:button(box_2:old(8.0, 8.0 + 36.0 * y, 264.0, 32.0), "Buy Ammo Item ($25)") then
+	if dialog_button(status, box_2:old(8.0, 8.0 + 36.0 * y, 264.0, 32.0), "Buy Ammo Item ($25)") then
 		if status.credit >= 25.0 then
 			table.insert(status.item, item:new(status, "Ammo Item"))
 			status.credit = status.credit - 25.0
@@ -342,100 +521,100 @@ local function layout_configuration(self, status)
 
 	local y = 0.0
 
-	if self.window:button(box_2:old(8.0 + 146.0 * 1.0, 8.0 + 36.0 * y, 142.0, 32.0), "Default") then
+	if dialog_button(status, box_2:old(8.0 + 146.0 * 1.0, 8.0 + 36.0 * y, 142.0, 32.0), "Default") then
 		status.user = user:default(status)
 	end; y = y + 1.0
 
 	local click = false
 
 	--[[ video section. ]]
-	status.user.video_full, click = self.window:toggle(box_2:old(8.0, 8.0 + 36.0 * y, 32.0, 32.0), "Full-Screen",
+	status.user.video_full, click = dialog_toggle(status, box_2:old(8.0, 8.0 + 36.0 * y, 32.0, 32.0), "Full-Screen",
 		status.user.video_full); y = y + 1.0
 
 	if click then
 		status.user:apply(status)
 	end
 
-	status.user.video_frame, click = self.window:slider(box_2:old(8.0, 8.0 + 36.0 * y, 288.0, 32.0), "Frame Rate",
+	status.user.video_frame, click = dialog_slider(status, box_2:old(8.0, 8.0 + 36.0 * y, 288.0, 32.0), "Frame Rate",
 		status.user.video_frame, 30.0, 300.0, 1.0); y = y + 1.0
 
 	if click then
 		status.user:apply(status)
 	end
 
-	status.user.video_shake = self.window:slider(box_2:old(8.0, 8.0 + 36.0 * y, 288.0, 32.0), "View Shake",
+	status.user.video_shake = dialog_slider(status, box_2:old(8.0, 8.0 + 36.0 * y, 288.0, 32.0), "View Shake",
 		status.user.video_shake, 0.0, 4.0, 0.1); y = y + 1.0
 
-	status.user.video_view = self.window:slider(box_2:old(8.0, 8.0 + 36.0 * y, 288.0, 32.0), "View Scale",
+	status.user.video_view = dialog_slider(status, box_2:old(8.0, 8.0 + 36.0 * y, 288.0, 32.0), "View Scale",
 		status.user.video_view, 0.1, 1.0, 0.05); y = y + 1.0
 
-	status.user.video_menu, click = self.window:switch(box_2:old(8.0, 8.0 + 36.0 * y, 288.0, 32.0), "Menu Scale",
+	status.user.video_menu, click = dialog_switch(status, box_2:old(8.0, 8.0 + 36.0 * y, 288.0, 32.0), "Menu Scale",
 		status.user.video_menu, VIDEO_MENU); y = y + 1.0
 
 	if click then
 		status.user:apply(status)
 	end
 
-	status.user.video_light = self.window:slider(box_2:old(8.0, 8.0 + 36.0 * y, 288.0, 32.0), "Brightness",
+	status.user.video_light = dialog_slider(status, box_2:old(8.0, 8.0 + 36.0 * y, 288.0, 32.0), "Brightness",
 		status.user.video_light, 0.0, 4.0, 0.1); y = y + 1.0
 
-	status.user.video_gamma = self.window:slider(box_2:old(8.0, 8.0 + 36.0 * y, 288.0, 32.0), "Gamma",
+	status.user.video_gamma = dialog_slider(status, box_2:old(8.0, 8.0 + 36.0 * y, 288.0, 32.0), "Gamma",
 		status.user.video_gamma, 1.0, 4.0, 0.1); y = y + 1.0
 
-	status.user.video_cross = self.window:slider(box_2:old(8.0, 8.0 + 36.0 * y, 288.0, 32.0), "Crosshair",
+	status.user.video_cross = dialog_slider(status, box_2:old(8.0, 8.0 + 36.0 * y, 288.0, 32.0), "Crosshair",
 		status.user.video_cross, 1.0, 4.0, 0.1); y = y + 1.0
 
-	status.user.video_language = self.window:slider(box_2:old(8.0, 8.0 + 36.0 * y, 288.0, 32.0), "Language",
+	status.user.video_language = dialog_slider(status, box_2:old(8.0, 8.0 + 36.0 * y, 288.0, 32.0), "Language",
 		status.user.video_language, 1.0, 4.0, 0.1); y = y + 1.0
 
-	status.user.video_glyph = self.window:switch(box_2:old(8.0, 8.0 + 36.0 * y, 288.0, 32.0), "Glyph Type",
+	status.user.video_glyph = dialog_switch(status, box_2:old(8.0, 8.0 + 36.0 * y, 288.0, 32.0), "Glyph Type",
 		status.user.video_glyph, VIDEO_GLYPH); y = y + 1.0
 
 	--[[ video section. ]]
-	status.user.audio_sound = self.window:slider(box_2:old(8.0, 8.0 + 36.0 * y, 288.0, 32.0), "Sound Volume",
+	status.user.audio_sound = dialog_slider(status, box_2:old(8.0, 8.0 + 36.0 * y, 288.0, 32.0), "Sound Volume",
 		status.user.audio_sound, 0.0, 1.0, 0.05); y = y + 1.0
 
-	status.user.audio_music = self.window:slider(box_2:old(8.0, 8.0 + 36.0 * y, 288.0, 32.0), "Music Volume",
+	status.user.audio_music = dialog_slider(status, box_2:old(8.0, 8.0 + 36.0 * y, 288.0, 32.0), "Music Volume",
 		status.user.audio_music, 0.0, 1.0, 0.05); y = y + 1.0
 
 	--[[ input section. ]]
-	status.user.input_pad_look = self.window:slider(box_2:old(8.0, 8.0 + 36.0 * y, 288.0, 32.0), "Pad Look Range",
+	status.user.input_pad_look = dialog_slider(status, box_2:old(8.0, 8.0 + 36.0 * y, 288.0, 32.0), "Pad Look Range",
 		status.user.input_pad_look, 1.0, 4.0, 0.1); y = y + 1.0
 
-	status.user.input_pad_assist = self.window:slider(box_2:old(8.0, 8.0 + 36.0 * y, 288.0, 32.0), "Pad Assist",
+	status.user.input_pad_assist = dialog_slider(status, box_2:old(8.0, 8.0 + 36.0 * y, 288.0, 32.0), "Pad Assist",
 		status.user.input_pad_assist, 1.0, 4.0, 0.1); y = y + 1.0
 
-	status.user.input_pad_rumble = self.window:slider(box_2:old(8.0, 8.0 + 36.0 * y, 288.0, 32.0), "Pad Rumble",
+	status.user.input_pad_rumble = dialog_slider(status, box_2:old(8.0, 8.0 + 36.0 * y, 288.0, 32.0), "Pad Rumble",
 		status.user.input_pad_rumble, 1.0, 4.0, 0.1); y = y + 1.0
 
-	self.window:action(box_2:old(8.0, 8.0 + 36.0 * y, 288.0, 32.0), "Move X+", status.user.input_move_x_a, 3.0)
+	dialog_action(status, box_2:old(8.0, 8.0 + 36.0 * y, 288.0, 32.0), "Move X+", status.user.input_move_x_a, 3.0)
 	y = y + 1.0
 
-	self.window:action(box_2:old(8.0, 8.0 + 36.0 * y, 288.0, 32.0), "Move X-", status.user.input_move_x_b, 3.0)
+	dialog_action(status, box_2:old(8.0, 8.0 + 36.0 * y, 288.0, 32.0), "Move X-", status.user.input_move_x_b, 3.0)
 	y = y + 1.0
 
-	self.window:action(box_2:old(8.0, 8.0 + 36.0 * y, 288.0, 32.0), "Move Y-", status.user.input_move_y_a, 3.0)
+	dialog_action(status, box_2:old(8.0, 8.0 + 36.0 * y, 288.0, 32.0), "Move Y-", status.user.input_move_y_a, 3.0)
 	y = y + 1.0
 
-	self.window:action(box_2:old(8.0, 8.0 + 36.0 * y, 288.0, 32.0), "Move Y+", status.user.input_move_y_b, 3.0)
+	dialog_action(status, box_2:old(8.0, 8.0 + 36.0 * y, 288.0, 32.0), "Move Y+", status.user.input_move_y_b, 3.0)
 	y = y + 1.0
 
-	self.window:action(box_2:old(8.0, 8.0 + 36.0 * y, 288.0, 32.0), "Weapon A", status.user.input_weapon_a, 3.0)
+	dialog_action(status, box_2:old(8.0, 8.0 + 36.0 * y, 288.0, 32.0), "Weapon A", status.user.input_weapon_a, 3.0)
 	y = y + 1.0
 
-	self.window:action(box_2:old(8.0, 8.0 + 36.0 * y, 288.0, 32.0), "Weapon B", status.user.input_weapon_b, 3.0)
+	dialog_action(status, box_2:old(8.0, 8.0 + 36.0 * y, 288.0, 32.0), "Weapon B", status.user.input_weapon_b, 3.0)
 	y = y + 1.0
 
-	self.window:action(box_2:old(8.0, 8.0 + 36.0 * y, 288.0, 32.0), "Ability A", status.user.input_ability_a, 3.0)
+	dialog_action(status, box_2:old(8.0, 8.0 + 36.0 * y, 288.0, 32.0), "Ability A", status.user.input_ability_a, 3.0)
 	y = y + 1.0
 
-	self.window:action(box_2:old(8.0, 8.0 + 36.0 * y, 288.0, 32.0), "Ability B", status.user.input_ability_b, 3.0)
+	dialog_action(status, box_2:old(8.0, 8.0 + 36.0 * y, 288.0, 32.0), "Ability B", status.user.input_ability_b, 3.0)
 	y = y + 1.0
 
-	self.window:action(box_2:old(8.0, 8.0 + 36.0 * y, 288.0, 32.0), "Item A", status.user.input_item_a, 3.0)
+	dialog_action(status, box_2:old(8.0, 8.0 + 36.0 * y, 288.0, 32.0), "Item A", status.user.input_item_a, 3.0)
 	y = y + 1.0
 
-	self.window:action(box_2:old(8.0, 8.0 + 36.0 * y, 288.0, 32.0), "Item B", status.user.input_item_b, 3.0)
+	dialog_action(status, box_2:old(8.0, 8.0 + 36.0 * y, 288.0, 32.0), "Item B", status.user.input_item_b, 3.0)
 	y = y + 1.0
 
 	camera_ease(self, status, vector_3:old(-3.0, 2.0, 3.5), vector_3:old(-5.0, 1.0, 2.75))
@@ -447,7 +626,7 @@ end
 local function layout_exit(self, status)
 	header_return(self, status, DIALOG_LAYOUT.MAIN)
 
-	if self.window:button(box_2:old(8.0, 8.0 + 36.0 * 1.0, 142.0, 32.0), "Accept") then
+	if dialog_button(status, box_2:old(8.0, 8.0 + 36.0 * 1.0, 142.0, 32.0), "Accept") then
 		status.active = false
 	end
 
@@ -465,7 +644,7 @@ function dialog:draw_3d(status)
 		status.camera_3d.focus:copy(self.ease_focus)
 		status.camera_3d.zoom = 45.0
 
-		local model = status.system:get_model("video/menu.gltf")
+		local model = status.system:get_model("video/menu.glb")
 		model:draw(vector_3:zero(), 1.0, color:white())
 
 		-- hunter

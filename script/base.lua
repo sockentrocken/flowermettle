@@ -82,7 +82,7 @@ INPUT_BOARD     = {
     GRAVE         = 96,
     SPACE         = 32,
     ESCAPE        = 256,
-    ENTER         = 257,
+    RETURN        = 257,
     TAB           = 258,
     BACKSPACE     = 259,
     INSERT        = 260,
@@ -97,7 +97,7 @@ INPUT_BOARD     = {
     END           = 269,
     CAPS_LOCK     = 280,
     SCROLL_LOCK   = 281,
-    NUM_LOCK      = 282,
+    NUMBER_LOCK   = 282,
     PRINT_SCREEN  = 283,
     PAUSE         = 284,
     F1            = 290,
@@ -112,14 +112,14 @@ INPUT_BOARD     = {
     F10           = 299,
     F11           = 300,
     F12           = 301,
-    LEFT_SHIFT    = 340,
-    LEFT_CONTROL  = 341,
-    LEFT_ALT      = 342,
-    LEFT_SUPER    = 343,
-    RIGHT_SHIFT   = 344,
-    RIGHT_CONTROL = 345,
-    RIGHT_ALT     = 346,
-    RIGHT_SUPER   = 347,
+    L_SHIFT       = 340,
+    L_CONTROL     = 341,
+    L_ALTERNATE   = 342,
+    L_SUPER       = 343,
+    R_SHIFT       = 344,
+    R_CONTROL     = 345,
+    R_ALTERNATE   = 346,
+    R_SUPER       = 347,
     KB_MENU       = 348,
     KP_0          = 320,
     KP_1          = 321,
@@ -1712,7 +1712,7 @@ function file_system:load()
     end
 end
 
-local function file_system_set_asset(self, memory_data, memory_list, call_new, faux_path)
+local function file_system_set_asset(self, memory_data, memory_list, call_new, faux_path, ...)
     -- if asset was already in memory...
     if memory_data[faux_path] then
         -- remove from the book-keeping memory table.
@@ -1728,7 +1728,7 @@ local function file_system_set_asset(self, memory_data, memory_list, call_new, f
     local asset = self.locate[faux_path]
 
     -- create the asset.
-    asset = call_new(asset)
+    asset = call_new(asset, ...)
 
     -- insert into the book-keeping memory table.
     table.insert(memory_list, faux_path)
@@ -1777,8 +1777,8 @@ end
 ---Set a font asset into the file-system model resource table.
 ---@param  faux_path string # The "faux" path to the asset, not taking into consideration the search path in which it was found.
 ---@return font asset # The asset.
-function file_system:set_font(faux_path)
-    return file_system_set_asset(self, self.memory_data.font, self.memory_list.font, quiver.font.new, faux_path)
+function file_system:set_font(faux_path, ...)
+    return file_system_set_asset(self, self.memory_data.font, self.memory_list.font, quiver.font.new, faux_path, ...)
 end
 
 -- ================================================================
@@ -2735,23 +2735,27 @@ end
 ---@param flag? gizmo_flag # OPTIONAL: The flag of the gizmo.
 ---@return number  value # The value.
 ---@return boolean click # True on click, false otherwise.
-function window:toggle(shape, label, value, flag)
+function window:toggle(shape, label, value, flag, call_back, call_data)
     -- get the state of this gizmo.
     local hover, index, focus, click = window_state(self, shape, flag)
-
-    -- draw a border, with a text off-set.
-    window_border(self, shape, hover, index, focus, label, vector_2:old(shape.width, 0.0))
 
     -- toggle value on click.
     if click then
         value = not value
     end
 
-    -- if value is set on, draw a small box to indicate so.
-    if value then
-        quiver.draw_2d.draw_box_2_border(
-            box_2:old(shape.x + 6.0, shape.y + 6.0, shape.width - 12.0, shape.height - 12.0), false,
-            BORDER_COLOR_D)
+    if call_back then
+        call_back(call_data, self, shape, hover, index, focus, label, value)
+    else
+        -- draw a border, with a text off-set.
+        window_border(self, shape, hover, index, focus, label, vector_2:old(shape.width, 0.0))
+
+        -- if value is set on, draw a small box to indicate so.
+        if value then
+            quiver.draw_2d.draw_box_2_border(
+                box_2:old(shape.x + 6.0, shape.y + 6.0, shape.width - 12.0, shape.height - 12.0), false,
+                BORDER_COLOR_D)
+        end
     end
 
     -- return value, and click.
@@ -2768,13 +2772,9 @@ end
 ---@param flag? gizmo_flag # OPTIONAL: The flag of the gizmo.
 ---@return number  value # The value.
 ---@return boolean click # True on click, false otherwise.
-function window:slider(shape, label, value, min, max, step, flag)
+function window:slider(shape, label, value, min, max, step, flag, call_back, call_data)
     -- get the state of this gizmo.
     local hover, index, focus, click, which = window_state(self, shape, flag, WINDOW_ACTION_LATERAL)
-
-    -- draw a border, with a text off-set.
-    window_border(self, shape, hover, index, focus, label, vector_2:old(shape.width, 0.0),
-        function() window_glyph(self, "board", "mouse", "pad") end)
 
     -- special preference for the mouse.
     if self.device == INPUT_DEVICE.MOUSE then
@@ -2812,22 +2812,30 @@ function window:slider(shape, label, value, min, max, step, flag)
     -- get the percentage of the value within the minimum/maximum range.
     local percentage = math.percentage_from_value(min, max, value)
 
-    -- if percentage is above 0.0...
-    if percentage > 0.0 then
-        quiver.draw_2d.draw_box_2_border(
-            box_2:old(shape.x + 6.0, shape.y + 6.0, (shape.width - 12.0) * percentage, shape.height - 12.0),
-            false,
-            BORDER_COLOR_D)
+    if call_back then
+        call_back(call_data, self, shape, hover, index, focus, label, value, percentage)
+    else
+        -- draw a border, with a text off-set.
+        window_border(self, shape, hover, index, focus, label, vector_2:old(shape.width, 0.0),
+            function() window_glyph(self, "board", "mouse", "pad") end)
+
+        -- if percentage is above 0.0...
+        if percentage > 0.0 then
+            quiver.draw_2d.draw_box_2_border(
+                box_2:old(shape.x + 6.0, shape.y + 6.0, (shape.width - 12.0) * percentage, shape.height - 12.0),
+                false,
+                BORDER_COLOR_D)
+        end
+
+        -- measure text.
+        local measure = LOGGER_FONT:measure_text(value, LOGGER_FONT_SCALE, LOGGER_FONT_SPACE)
+
+        -- draw value.
+        LOGGER_FONT:draw(value, vector_2:old(shape.x + (shape.width * 0.5) - (measure * 0.5), shape.y + 4.0),
+            LOGGER_FONT_SCALE,
+            LOGGER_FONT_SPACE,
+            color:white())
     end
-
-    -- measure text.
-    local measure = LOGGER_FONT:measure_text(value, LOGGER_FONT_SCALE, LOGGER_FONT_SPACE)
-
-    -- draw value.
-    LOGGER_FONT:draw(value, vector_2:old(shape.x + (shape.width * 0.5) - (measure * 0.5), shape.y + 4.0),
-        LOGGER_FONT_SCALE,
-        LOGGER_FONT_SPACE,
-        color:white())
 
     -- return value, and click.
     return value, click
@@ -2841,35 +2849,24 @@ end
 ---@param flag? gizmo_flag # OPTIONAL: The flag of the gizmo.
 ---@return number  value # The value.
 ---@return boolean click # True on click, false otherwise.
-function window:switch(shape, label, value, pool, flag)
+function window:switch(shape, label, value, pool, flag, call_back, call_data)
     -- get the state of this gizmo.
     local hover, index, focus, click, which = window_state(self, shape, flag, WINDOW_ACTION_LATERAL)
 
-    -- draw a border, with a text off-set.
-    window_border(self, shape, hover, index, focus, label, vector_2:old(shape.width, 0.0),
-        function() window_glyph(self, "board", "mouse", "pad") end)
-
     local value_a = nil
     local value_b = nil
-    local label = "N/A"
+    local value_label = "N/A"
 
-    -- for each entry in the value pool.
-    for pool_value, pool_label in pairs(pool) do
-        --  if the given value is the same as the value in the entry...
-        if value == pool_value then
-            -- set the label to draw to be the same as the entry's.
-            label = pool_label
+    value_label = pool[value]
 
-            -- if there's an entry below us...
-            if pool[pool_value - 1] then
-                value_a = pool_value - 1
-            end
+    -- if there's an entry below us...
+    if pool[value - 1] then
+        value_a = value - 1
+    end
 
-            -- if there's an entry below us...
-            if pool[pool_value + 1] then
-                value_b = pool_value + 1
-            end
-        end
+    -- if there's an entry below us...
+    if pool[value + 1] then
+        value_b = value + 1
     end
 
     -- if there has been input at all...
@@ -2892,14 +2889,21 @@ function window:switch(shape, label, value, pool, flag)
         end
     end
 
-    -- measure text.
-    local measure = LOGGER_FONT:measure_text(label, LOGGER_FONT_SCALE, LOGGER_FONT_SPACE)
+    if call_back then
+        call_back(call_data, self, shape, hover, index, focus, label, value_label)
+    else
+        -- draw a border, with a text off-set.
+        window_border(self, shape, hover, index, focus, label, vector_2:old(shape.width, 0.0))
 
-    -- draw value.
-    LOGGER_FONT:draw(label, vector_2:old(shape.x + (shape.width * 0.5) - (measure * 0.5), shape.y + 4.0),
-        LOGGER_FONT_SCALE,
-        LOGGER_FONT_SPACE,
-        color:white())
+        -- measure text.
+        local measure = LOGGER_FONT:measure_text(value_label, LOGGER_FONT_SCALE, LOGGER_FONT_SPACE)
+
+        -- draw value.
+        LOGGER_FONT:draw(value_label, vector_2:old(shape.x + (shape.width * 0.5) - (measure * 0.5), shape.y + 4.0),
+            LOGGER_FONT_SCALE,
+            LOGGER_FONT_SPACE,
+            color:white())
+    end
 
     -- return value, and click.
     return value, click
@@ -2912,7 +2916,7 @@ end
 ---@param clamp?  number     # OPTIONAL: The maximum button count for the action. If nil, do not clamp.
 ---@param flag?   gizmo_flag # The flag of the gizmo.
 ---@return boolean click # True on click, false otherwise.
-function window:action(shape, label, value, clamp, flag)
+function window:action(shape, label, value, clamp, flag, call_back, call_data)
     local pick = false
 
     -- if pick gizmo is not nil...
@@ -2958,9 +2962,6 @@ function window:action(shape, label, value, clamp, flag)
     -- get the state of this gizmo.
     local hover, index, focus, click, which = window_state(self, shape, flag, action)
 
-    -- draw a border.
-    window_border(self, shape, hover, index, focus, label, vector_2:old(shape.width, 0.0))
-
     -- if there has been input at all...
     if which then
         -- get the actual button.
@@ -2976,23 +2977,30 @@ function window:action(shape, label, value, clamp, flag)
         end
     end
 
-    local label = #value.list > 0.0 and "" or "N/A"
+    if call_back then
+        call_back(call_data, self, shape, hover, index, focus, label, value)
+    else
+        -- draw a border.
+        window_border(self, shape, hover, index, focus, label, vector_2:old(shape.width, 0.0))
 
-    -- for every button in the action's list...
-    for i, button in ipairs(value.list) do
-        -- concatenate the button's name.
-        label = label .. (i > 1.0 and "/" or "")
-            .. button:name()
+        local label = #value.list > 0.0 and "" or "N/A"
+
+        -- for every button in the action's list...
+        for i, button in ipairs(value.list) do
+            -- concatenate the button's name.
+            label = label .. (i > 1.0 and "/" or "")
+                .. button:name()
+        end
+
+        -- measure text.
+        local measure = LOGGER_FONT:measure_text(label, LOGGER_FONT_SCALE, LOGGER_FONT_SPACE)
+
+        -- draw value.
+        LOGGER_FONT:draw(label, vector_2:old(shape.x + (shape.width * 0.5) - (measure * 0.5), shape.y + 4.0),
+            LOGGER_FONT_SCALE,
+            LOGGER_FONT_SPACE,
+            color:white())
     end
-
-    -- measure text.
-    local measure = LOGGER_FONT:measure_text(label, LOGGER_FONT_SCALE, LOGGER_FONT_SPACE)
-
-    -- draw value.
-    LOGGER_FONT:draw(label, vector_2:old(shape.x + (shape.width * 0.5) - (measure * 0.5), shape.y + 4.0),
-        LOGGER_FONT_SCALE,
-        LOGGER_FONT_SPACE,
-        color:white())
 
     return click
 end

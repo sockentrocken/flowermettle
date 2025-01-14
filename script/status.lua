@@ -69,10 +69,12 @@ function status:new()
         i.dialog.logger:print(..., color:new(255.0, 255.0, 255.0, 255.0))
     end
 
-    local tex_a    = i.system:set_texture("video/map/black/texture_08.png")
-    local tex_b    = i.system:set_texture("video/map/white/texture_08.png")
+    i.system:set_font("video/font_side.ttf", 24.0)
 
-    local menu     = i.system:set_model("video/menu.gltf")
+    local tex_a = i.system:set_texture("video/map/black/texture_08.png")
+    local tex_b = i.system:set_texture("video/map/white/texture_08.png")
+
+    local menu  = i.system:set_model("video/menu.glb")
     menu:bind(1.0, 0.0, tex_a)
     menu:bind(2.0, 0.0, tex_b)
 

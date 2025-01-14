@@ -3,6 +3,3 @@ asset/
 
 # User data.
 user.json
-
-# LSP data.
-meta.lua
