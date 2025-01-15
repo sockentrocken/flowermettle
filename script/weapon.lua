@@ -61,7 +61,20 @@ end
 
 function weapon:use(status, side)
 	if self.ammo > 0.0 and self.rate == 0.0 then
-		local i = projectile:new(status, status.player.point, nil, status.player:aim(status) * 32.0)
+		local x, y = quiver.input.mouse.get_point()
+		local ray = quiver.draw_3d.get_screen_to_world(status.camera_3d, vector_2:old(x, y),
+			vector_2:old(quiver.window.get_shape()))
+
+		local collider, time = status.rapier:cast_ray(ray, 4096.0, true, status.level_rigid)
+
+		local aim = status.player:aim(status)
+
+		if collider then
+			local c_point = vector_3:old(status.rapier:get_collider_translation(collider))
+			aim = (c_point - status.player.point):normalize()
+		end
+
+		local i = projectile:new(status, status.player.point, nil, aim * 32.0)
 		status.player.camera_shake = 0.15
 		self.ammo = self.ammo - 1.00
 		self.rate = self.rate + 0.20

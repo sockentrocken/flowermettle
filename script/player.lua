@@ -37,10 +37,10 @@ end
 function projectile:tick(status, step)
 	self.point:copy(self.point + (self.speed * step))
 
-	local test = status.rapier:test_intersect_cuboid(self.point, vector_3:one())
-	if test then
-		print(test)
-	end
+	--local test = status.rapier:test_intersect_cuboid(self.point, vector_3:one())
+	--if test then
+	--	print(test)
+	--end
 end
 
 function projectile:draw_3d(status)
@@ -54,7 +54,7 @@ local PLAYER_GRAVITY      = 32.00
 local PLAYER_INCREASE     = 8.00
 local PLAYER_SPEED_MAX    = 8.00
 local PLAYER_SPEED_MIN    = 0.01
-local CAMERA_FOLLOW_POINT = vector_3:new(0.0, 12.0, 4.0)
+local CAMERA_FOLLOW_POINT = vector_3:new(0.0, 8.0, 4.0)
 local CAMERA_FOLLOW_SPEED = 8.0
 
 --[[----------------------------------------------------------------]]
@@ -124,7 +124,7 @@ end
 
 function player:aim(status)
 	local where = nil
-	local shape = vector_2:old(quiver.window.get_render_shape()) * 0.5
+	local shape = vector_2:old(quiver.window.get_shape()) * 0.5
 
 	if status.dialog.window.device == INPUT_DEVICE.PAD then
 		local axis_x = quiver.input.pad.get_axis_state(0.0, 2.0)
@@ -132,7 +132,7 @@ function player:aim(status)
 		where = vector_2:old(axis_x, axis_y) * 256.0
 	else
 		local mouse = vector_2:old(quiver.input.mouse.get_point())
-		local shape = vector_2:old(quiver.window.get_render_shape()) * 0.5
+		local shape = vector_2:old(quiver.window.get_shape()) * 0.5
 		where = (mouse - shape)
 	end
 
@@ -196,7 +196,26 @@ function player:draw_3d(status)
 	status.camera_3d.focus:copy(self.camera_point + shake)
 	status.camera_3d.zoom = 90.0
 
-	quiver.draw_3d.draw_line(self.point, self.point + self:aim(status) * 4.0, color:red())
+	local x, y = quiver.input.mouse.get_point()
+	local ray = quiver.draw_3d.get_screen_to_world(status.camera_3d, vector_2:old(x, y),
+		vector_2:old(quiver.window.get_shape()))
+
+	local collider, time = status.rapier:cast_ray(ray, 4096.0, true, status.level_rigid)
+
+	local c = color:red()
+
+	if collider then
+		local c_point = vector_3:old(status.rapier:get_collider_translation(collider))
+		aim = (c_point - self.point):normalize()
+		c = c:blue()
+
+		quiver.draw_3d.draw_cube(
+			vector_3:old(ray.position.x, ray.position.y, ray.position.z) +
+			vector_3:old(ray.direction.x, ray.direction.y, ray.direction.z) * time,
+			vector_3:one() * 0.5, color:green())
+	end
+
+	quiver.draw_3d.draw_line(self.point, self.point + aim * 4.0, c)
 
 	-- draw hunter, weapon.
 	status.hunter[self.hunter]:draw_3d(status)

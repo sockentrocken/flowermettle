@@ -63,11 +63,14 @@ function status:new()
     i.entity       = {}
     i.entity_index = 0.0
     i.rapier       = quiver.rapier:new()
+    i.render       = quiver.render_texture.new(vector_2:old(quiver.window.get_shape()) * i.user.video_view)
 
     -- over-ride default print function with our own.
-    print          = function(...)
-        i.dialog.logger:print(..., color:new(255.0, 255.0, 255.0, 255.0))
-    end
+    --print          = function(...)
+    --    i.dialog.logger:print(..., color:new(255.0, 255.0, 255.0, 255.0))
+    --end
+
+    i.system:set_model("video/character.glb")
 
     i.system:set_font("video/font_side.ttf", 24.0)
 
@@ -111,10 +114,41 @@ function status:initialize_map(map)
     model:bind(0.0, 0.0, tex_a)
     model:bind(1.0, 0.0, tex_b)
 
+    self.level_rigid = self.rapier:rigid_body(0.0)
+
     for x = 0, model.mesh_count - 1.0 do
         local collider = self.rapier:collider_builder_convex_hull(model:mesh_vertex(x))
-        self.rapier:collider_insert(collider)
+        self.rapier:collider_insert(collider, self.level_rigid)
     end
+
+    local collider = self.rapier:collider_builder_cuboid(vector_3:old(0.5, 1.0, 0.5))
+    collider = self.rapier:collider_builder_translation(collider, vector_3:old(28.0, 4.0, -16.0))
+    self.rapier:collider_insert(collider)
+end
+
+--[[----------------------------------------------------------------]]
+
+function status:draw()
+    self.render:begin(function()
+        quiver.draw.clear(color:black())
+        quiver.draw_3d.begin(function() self:draw_3d() end, self.camera_3d)
+    end)
+
+    if quiver.window.get_resize() then
+        self.render = quiver.render_texture.new(vector_2:old(quiver.window.get_shape()) * self.user.video_view)
+    end
+
+    local x, y = quiver.window.get_shape()
+
+    self.render:draw_pro(
+        box_2:old(0.0, 0.0, self.render.shape_x, -self.render.shape_y),
+        box_2:old(0.0, 0.0, x, y),
+        vector_2:zero(),
+        0.0,
+        color:white()
+    )
+
+    quiver.draw_2d.begin(function() self:draw_2d() end, self.camera_2d)
 end
 
 ---Attach an entity from the entity game status.
@@ -154,10 +188,7 @@ function status:tick()
                 end
             end
 
-            self.rapier:step(function(c_1, c_2)
-                table.print(c_1, c_2)
-            end
-            )
+            self.rapier:step()
             self.time = self.time + TIME_STEP
             self.step = self.step - TIME_STEP
         end

@@ -423,6 +423,24 @@ end
 
 --[[----------------------------------------------------------------]]
 
+---Deep copy a table.
+---@param value table # Table to copy.
+function table.copy(value, work)
+    if not work then
+        work = {}
+    end
+
+    for k, v in pairs(value) do
+        if type(v) == "table" then
+            work[k] = table.copy(v)
+        else
+            work[k] = v
+        end
+    end
+
+    return work
+end
+
 ---Print every key/value pair in a table.
 ---@param value table # Table to print.
 function table.print(value)
@@ -3003,6 +3021,66 @@ function window:action(shape, label, value, clamp, flag, call_back, call_data)
     end
 
     return click
+end
+
+---Draw an action gizmo.
+---@param shape   box_2      # The shape of the gizmo.
+---@param label   string     # The label of the gizmo.
+---@param value   action     # The value of the gizmo.
+---@param clamp?  number     # OPTIONAL: The maximum button count for the action. If nil, do not clamp.
+---@param flag?   gizmo_flag # The flag of the gizmo.
+---@return boolean click # True on click, false otherwise.
+function window:entry(shape, label, value, flag)
+    local pick = false
+
+    -- if pick gizmo is not nil...
+    if self.pick then
+        -- check if we are the pick gizmo.
+        pick = self.pick == self.count
+    end
+
+    -- if we are the pick gizmo...
+    if pick then
+        -- get every button press in the queue.
+        local board_queue = quiver.input.board.get_uni_code_queue()
+
+        -- if a button was set off...
+        if board_queue > 0.0 then
+            value = value .. string.char(board_queue)
+        end
+
+        if quiver.input.board.get_press(INPUT_BOARD.RETURN) then
+            -- remove us from the focus gizmo, lock navigation, and remove us from the pick gizmo.
+            self.focus = nil
+            self.shift = true
+            self.pick = nil
+        elseif quiver.input.board.get_press(INPUT_BOARD.BACKSPACE) then
+            -- pop the last character of the working buffer.
+            value = string.sub(value, 0, #value - 1)
+        end
+    end
+
+    local action = pick and action:new({}) or WINDOW_ACTION_FOCUS
+
+    -- get the state of this gizmo.
+    local hover, index, focus, click, which = window_state(self, shape, flag, action)
+
+    -- if there has been input at all...
+    if which then
+        self.focus = self.count - 1.0
+        self.pick = self.count - 1.0
+    end
+
+    -- draw a border.
+    window_border(self, shape, hover, index, focus, label, vector_2:old(shape.width, 0.0))
+
+    -- draw value.
+    LOGGER_FONT:draw(value, vector_2:old(shape.x + 4.0, shape.y + 4.0),
+        LOGGER_FONT_SCALE,
+        LOGGER_FONT_SPACE,
+        color:white())
+
+    return value
 end
 
 -- ================================================================

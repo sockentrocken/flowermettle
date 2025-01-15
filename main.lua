@@ -27,9 +27,9 @@ require "script/item"
 
 --[[----------------------------------------------------------------]]
 
-local global_status = status:new()
-
 function quiver.main()
+    local global_status = status:new()
+
     while not quiver.window.get_close() and global_status.active do
         if quiver.input.board.get_press(INPUT_BOARD.F1) then
             break
@@ -41,30 +41,10 @@ function quiver.main()
 
         table_pool:clear()
 
-        quiver.draw.begin(draw)
+        quiver.draw.begin(function() global_status:draw() end)
     end
 
     global_status.user:save()
 
     return quiver.input.board.get_press(INPUT_BOARD.F1)
-end
-
---[[----------------------------------------------------------------]]
-
-function draw()
-    quiver.draw.clear(color:black())
-    quiver.draw_3d.begin(draw_3d, global_status.camera_3d)
-    quiver.draw_2d.begin(draw_2d, global_status.camera_2d)
-end
-
---[[----------------------------------------------------------------]]
-
-function draw_3d()
-    global_status:draw_3d()
-end
-
---[[----------------------------------------------------------------]]
-
-function draw_2d()
-    global_status:draw_2d()
 end
