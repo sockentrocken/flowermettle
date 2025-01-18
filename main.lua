@@ -15,36 +15,33 @@
 
 require "script/base"
 require "script/status"
+require "script/lobby"
+require "script/inner"
+require "script/outer"
 require "script/user"
-require "script/dialog"
-require "script/editor"
 require "script/entity"
-require "script/player"
 require "script/hunter"
 require "script/weapon"
-require "script/ability"
-require "script/item"
 
 --[[----------------------------------------------------------------]]
 
 function quiver.main()
-    local global_status = status:new()
+    -- create the game state.
+    local status = status:new()
 
-    while not quiver.window.get_close() and global_status.active do
+    -- while window should remain open and status is active...
+    while not quiver.window.get_close() and status.active do
+        -- re-load quiver.
         if quiver.input.board.get_press(INPUT_BOARD.F1) then
             break
         end
 
-        table_pool:clear()
-
-        global_status:tick()
-
-        table_pool:clear()
-
-        quiver.draw.begin(function() global_status:draw() end)
+        -- draw state.
+        quiver.draw.begin(function() status:draw() end)
     end
 
-    global_status.user:save()
+    -- save user data.
+    status.lobby.user:save()
 
     return quiver.input.board.get_press(INPUT_BOARD.F1)
 end

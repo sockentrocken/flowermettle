@@ -13,6 +13,17 @@
 -- OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 -- PERFORMANCE OF THIS SOFTWARE.
 
+local WEAPON_NAME = {
+	"The Executioner",
+	"The Bastard",
+	"The Killer",
+	"The Eviscerator",
+	"The Naughty",
+	"The Evil",
+	"The Gone",
+	"The Irredeemable"
+}
+
 ---@class weapon
 weapon = {
 	__meta = {}
@@ -28,18 +39,33 @@ function weapon:new(status)
 
 	--[[]]
 
-	i.__type = "weapon"
-	i.name   = "Weapon #1"
-	i.ammo   = 25.0
-	i.rate   = 0.00
+	i.__type       = "weapon"
+	i.name         = WEAPON_NAME[math.random(1, #WEAPON_NAME)]
+	i.ammo         = 25.0
+	i.ammo_maximum = 25.0
+	i.miss_rate    = 1.00
+	i.fire_rate    = 10.00
+	i.rate         = 0.00
+	i.miss         = 0.00
 
 	return i
+end
+
+function weapon:randomize_name(status)
+	local name = WEAPON_NAME[math.random(1, #WEAPON_NAME)]
+
+	while self.name == name do
+		name = WEAPON_NAME[math.random(1, #WEAPON_NAME)]
+	end
+
+	self.name = name
 end
 
 ---Draw the weapon.
 ---@param status status # The game status.
 function weapon:tick(status, step, side)
-	self.rate = math.max(0.0, self.rate - step)
+	self.rate = math.max(0.0, self.rate - step * 1.0)
+	self.miss = math.max(0.0, self.miss - step * 8.0)
 end
 
 ---Draw the weapon.
@@ -51,33 +77,38 @@ end
 ---Draw the weapon.
 ---@param status status # The game status.
 function weapon:draw_2d(status, side)
-	local x, y  = quiver.window.get_render_shape()
-	local point = vector_2:old(8.0 + (x - 160.0 - 16.0) * side, y - 40.0 * 2.0)
+	local point = vector_2:old(8.0, 8.0 + 44.0 * side)
+	local font  = status.lobby.system:get_font("video/font_side.ttf")
+	local text  = side == 0.0 and "Weapon A: " or "Weapon B: "
 
-	quiver.draw_2d.draw_box_2_border(box_2:old(point.x, point.y, 160.0, 32.0))
-	LOGGER_FONT:draw("Weapon: " .. self.ammo, point + vector_2:old(8.0, 4.0), LOGGER_FONT_SCALE, LOGGER_FONT_SPACE,
+	quiver.draw_2d.draw_box_2_border(box_2:old(point.x, point.y, 512.0, 36.0))
+	font:draw(text .. self.name .. " : " .. self.ammo, point + vector_2:old(8.0, 4.0), LOGGER_FONT_SCALE,
+		LOGGER_FONT_SPACE,
 		color:white())
 end
 
 function weapon:use(status, side)
 	if self.ammo > 0.0 and self.rate == 0.0 then
 		local x, y = quiver.input.mouse.get_point()
-		local ray = quiver.draw_3d.get_screen_to_world(status.camera_3d, vector_2:old(x, y),
+		local ray = quiver.draw_3d.get_screen_to_world(status.outer.camera_3d, vector_2:old(x, y),
 			vector_2:old(quiver.window.get_shape()))
 
-		local collider, time = status.rapier:cast_ray(ray, 4096.0, true, status.level_rigid)
+		local collider, time = status.outer.rapier:cast_ray(ray, 4096.0, true, status.outer.level_rigid)
 
-		local aim = status.player:aim(status)
+		local aim = status.outer.player:aim(status)
 
 		if collider then
-			local c_point = vector_3:old(status.rapier:get_collider_translation(collider))
-			aim = (c_point - status.player.point):normalize()
+			local c_point = vector_3:old(status.outer.rapier:get_collider_translation(collider))
+			aim = (c_point - status.outer.player.point):normalize()
 		end
 
-		local i = projectile:new(status, status.player.point, nil, aim * 32.0)
-		status.player.camera_shake = 0.15
-		self.ammo = self.ammo - 1.00
-		self.rate = self.rate + 0.20
-		--quiver.input.pad.set_rumble(0.0, 1024.0, 1024.0, 0.25)
+		local i = projectile:new(status)
+		i:set_point(status, status.outer.player.point)
+		i.speed:copy(aim * 32.0)
+		i.parent = status.outer.rapier:get_collider_user_data(status.outer.player.collider)
+		status.outer.player.camera_shake = 0.05
+		--self.ammo = self.ammo - 1.00
+		self.rate = self.rate + (0.50 / self.fire_rate)
+		self.miss = math.min(4.0, self.miss + 1.0)
 	end
 end

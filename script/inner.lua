@@ -13,32 +13,33 @@
 -- OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 -- PERFORMANCE OF THIS SOFTWARE.
 
----@class ability
-ability = {
+---@class inner
+inner = {
 	__meta = {}
 }
 
----Create a new ability.
----@param status status # The game status.
----@return ability value # The ability.
-function ability:new(status)
+---Create a new inner state (in-menu state).
+---@return inner value # The inner state.
+function inner:new(status)
 	local i = {}
 	setmetatable(i, self.__meta)
 	getmetatable(i).__index = self
 
 	--[[]]
 
-	i.__type = "ability"
-	i.name   = "Ability #1"
+	status.inner = i
+
+	i.__type = "inner"
+	i.credit = 250.0
+	i.hunter = {
+		hunter:new()
+	}
+	i.weapon = {
+		weapon:new(),
+		weapon:new(),
+	}
+
+	collectgarbage("collect")
 
 	return i
-end
-
-function ability:draw(status, side)
-	local x, y  = quiver.window.get_render_shape()
-	local point = vector_2:old(8.0 + (x - 160.0 - 16.0) * side, y - 40.0 * 1.0)
-
-	quiver.draw_2d.draw_box_2_border(box_2:old(point.x, point.y, 160.0, 32.0))
-	LOGGER_FONT:draw("Ability: 25", point + vector_2:old(8.0, 4.0), LOGGER_FONT_SCALE, LOGGER_FONT_SPACE,
-		color:white())
 end

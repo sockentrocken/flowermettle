@@ -19,12 +19,8 @@ local USER_FILE = "user.json"
 ---@field video_full       boolean
 ---@field video_frame      number
 ---@field video_shake      number
----@field video_view       number
----@field video_menu       number
 ---@field video_light      number
 ---@field video_gamma      number
----@field video_cross      number
----@field video_language   number
 ---@field video_glyph      number
 ---@field audio_sound      number
 ---@field audio_music      number
@@ -37,24 +33,9 @@ local USER_FILE = "user.json"
 ---@field input_move_y_b   action
 ---@field input_weapon_a   action
 ---@field input_weapon_b   action
----@field input_ability_a  action
----@field input_ability_b  action
----@field input_item_a  action
----@field input_item_b  action
 user = {
     __meta = {}
 }
-
----Get the correct 2D camera zoom rate.
----@param self # The user.
----@return number zoom # The zoom rate.
-local function user_zoom(self)
-    if self.video_menu == 0.0 then
-        return 1.0
-    end
-
-    return self.video_menu * 0.25
-end
 
 ---Load the user data. WARNING: user file must exist!
 ---@param status status # The game status.
@@ -97,16 +78,12 @@ function user:default(status)
     i.__type = "user"
 
     --[[ video. ]]
-    i.video_full     = true
-    i.video_frame    = 60.0
-    i.video_view     = 1.0
-    i.video_menu     = 0.0
-    i.video_shake    = 1.0
-    i.video_light    = 0.0
-    i.video_gamma    = 1.0
-    i.video_cross    = 1.0
-    i.video_language = 1.0
-    i.video_glyph    = 0.0
+    i.video_full  = true
+    i.video_frame = 60.0
+    i.video_shake = 1.0
+    i.video_light = 0.0
+    i.video_gamma = 1.0
+    i.video_glyph = 0.0
 
     --[[ audio. ]]
     i.audio_sound = 1.0
@@ -135,22 +112,6 @@ function user:default(status)
     i.input_weapon_b   = action:new({
         action_button:new(INPUT_DEVICE.MOUSE, INPUT_MOUSE.RIGHT),
         action_button:new(INPUT_DEVICE.PAD, INPUT_PAD.RIGHT_TRIGGER_2)
-    })
-    i.input_ability_a  = action:new({
-        action_button:new(INPUT_DEVICE.BOARD, INPUT_BOARD.Q),
-        action_button:new(INPUT_DEVICE.PAD, INPUT_PAD.LEFT_TRIGGER_1)
-    })
-    i.input_ability_b  = action:new({
-        action_button:new(INPUT_DEVICE.BOARD, INPUT_BOARD.E),
-        action_button:new(INPUT_DEVICE.PAD, INPUT_PAD.RIGHT_TRIGGER_1)
-    })
-    i.input_item_a     = action:new({
-        action_button:new(INPUT_DEVICE.BOARD, INPUT_BOARD.Z),
-        action_button:new(INPUT_DEVICE.PAD, INPUT_PAD.LEFT_FACE_LEFT)
-    })
-    i.input_item_b     = action:new({
-        action_button:new(INPUT_DEVICE.BOARD, INPUT_BOARD.C),
-        action_button:new(INPUT_DEVICE.PAD, INPUT_PAD.LEFT_FACE_RIGHT)
     })
 
     -- apply user data.
@@ -183,7 +144,4 @@ function user:apply(status)
 
     -- set exit key.
     quiver.general.set_exit_key(INPUT_BOARD.NULL)
-
-    status.camera_2d.zoom = user_zoom(self)
-    quiver.input.mouse.set_scale(vector_2:old(1.0 / user_zoom(self), 1.0 / user_zoom(self)))
 end

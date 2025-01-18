@@ -3,3 +3,6 @@ asset/
 
 # User data.
 user.json
+
+# LSP data.
+script/_meta.lua

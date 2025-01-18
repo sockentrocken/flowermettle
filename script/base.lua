@@ -520,8 +520,10 @@ function table.restore_meta(value)
                 print("Restoring value: " .. value.__type)
 
                 -- restore the current table's meta-table to be that of the class table.
-                setmetatable(value, meta.__meta)
-                getmetatable(value).__index = meta
+                if meta.__meta then
+                    setmetatable(value, meta.__meta)
+                    getmetatable(value).__index = meta
+                end
             else
                 error(string.format(
                     "table.restore_meta(): Found \"__type\" for table, but could not find \"%s\" class table.",
@@ -1716,6 +1718,18 @@ function file_system:scan(search)
     end
 end
 
+function file_system:list(search)
+    local result = {}
+
+    for path, _ in pairs(self.locate) do
+        if string.start_with(path, search) then
+            table.insert(result, path)
+        end
+    end
+
+    return result
+end
+
 ---Find an asset by name, to get the full path of the asset.
 ---@param  faux_path string # The "faux" path to the asset, not taking into consideration the search path in which it was found.
 ---@return string full_path # The "full" path to the asset.
@@ -1730,16 +1744,20 @@ function file_system:load()
     end
 end
 
-local function file_system_set_asset(self, memory_data, memory_list, call_new, faux_path, ...)
+local function file_system_set_asset(self, memory_data, memory_list, call_new, force, faux_path, ...)
     -- if asset was already in memory...
     if memory_data[faux_path] then
-        -- remove from the book-keeping memory table.
-        table.remove_object(memory_list, faux_path)
+        if force then
+            -- remove from the book-keeping memory table.
+            table.remove_object(memory_list, faux_path)
 
-        -- remove from the data-keeping memory table.
-        memory_data[faux_path] = nil
+            -- remove from the data-keeping memory table.
+            memory_data[faux_path] = nil
 
-        collectgarbage("collect")
+            collectgarbage("collect")
+        else
+            return memory_data[faux_path]
+        end
     end
 
     -- locate the asset.
@@ -1761,7 +1779,8 @@ end
 ---@param  faux_path string # The "faux" path to the asset, not taking into consideration the search path in which it was found.
 ---@return texture asset # The asset.
 function file_system:set_texture(faux_path)
-    return file_system_set_asset(self, self.memory_data.texture, self.memory_list.texture, quiver.texture.new, faux_path)
+    return file_system_set_asset(self, self.memory_data.texture, self.memory_list.texture, quiver.texture.new, false,
+        faux_path)
 end
 
 ---Get a texture asset from the file-system model resource table.
@@ -1782,7 +1801,7 @@ end
 ---@param  faux_path string # The "faux" path to the asset, not taking into consideration the search path in which it was found.
 ---@return model asset # The asset.
 function file_system:set_model(faux_path)
-    return file_system_set_asset(self, self.memory_data.model, self.memory_list.model, quiver.model.new, faux_path)
+    return file_system_set_asset(self, self.memory_data.model, self.memory_list.model, quiver.model.new, false, faux_path)
 end
 
 ---Get a model asset from the file-system model resource table.
@@ -1796,7 +1815,8 @@ end
 ---@param  faux_path string # The "faux" path to the asset, not taking into consideration the search path in which it was found.
 ---@return font asset # The asset.
 function file_system:set_font(faux_path, ...)
-    return file_system_set_asset(self, self.memory_data.font, self.memory_list.font, quiver.font.new, faux_path, ...)
+    return file_system_set_asset(self, self.memory_data.font, self.memory_list.font, quiver.font.new, false, faux_path,
+        ...)
 end
 
 -- ================================================================
@@ -2463,8 +2483,9 @@ local WINDOW_DOT              = vector_2:new(4.0, 4.0)
 
 ---@enum gizmo_flag
 GIZMO_FLAG                    = {
-    IGNORE_BOARD = 0x00000001,
-    IGNORE_MOUSE = 0x00000010,
+    IGNORE_BOARD   = 0x00000001,
+    IGNORE_MOUSE   = 0x00000010,
+    CLICK_ON_PRESS = 0x00000100,
 }
 
 ---@class window
@@ -2558,8 +2579,17 @@ local function window_state(self, shape, flag, input)
     -- get the mouse position.
     local mouse_x, mouse_y = quiver.input.mouse.get_point()
     local mouse = vector_2:old(mouse_x, mouse_y)
+
+    local check = true
+
+    -- if there is a view-port shape set...
+    if self.shape then
+        -- check if the gizmo is within it.
+        check = collision.box_box(shape, self.shape) and collision.point_box(mouse, self.shape)
+    end
+
     -- mouse interaction check.
-    local hover = self.device == INPUT_DEVICE.MOUSE and collision.point_box(mouse, shape)
+    local hover = self.device == INPUT_DEVICE.MOUSE and collision.point_box(mouse, shape) and check
     -- board interaction check.
     local index = self.device ~= INPUT_DEVICE.MOUSE and self.index == self.count
     -- whether or not this gizmo has been set off.
@@ -2596,12 +2626,16 @@ local function window_state(self, shape, flag, input)
         -- if input over-ride isn't nil...
         if input then
             -- over-ride the default focus button with the given one.
-            hover_click = input:press(self.device)
+            hover_click, which = input:press(self.device)
         end
 
-        -- focus button was set off, set us as the focus gizmo.
         if hover_click then
-            self.focus = self.count
+            if flag and bit.band(flag, GIZMO_FLAG.CLICK_ON_PRESS) ~= 0 then
+                click = true
+            else
+                -- focus button was set off, set us as the focus gizmo.
+                self.focus = self.count
+            end
         end
     end
 
@@ -2628,6 +2662,11 @@ local function window_state(self, shape, flag, input)
 
     -- increase gizmo count.
     self.count = self.count + 1
+    self.last = shape.y + shape.height
+
+    if index then
+        self.gizmo = shape
+    end
 
     return hover, index, focus, click, which
 end
@@ -2644,12 +2683,15 @@ function window:new()
     i.__type = "window"
     i.index = 0.0
     i.count = 0.0
+    i.point = 0.0
+    i.shape = nil
     i.focus = nil
     i.glyph = nil
     i.which = 0.0
     i.shift = false
     i.pick = nil
     i.device = INPUT_DEVICE.MOUSE
+    i.gizmo = nil
 
     return i
 end
@@ -2726,20 +2768,50 @@ function window:set_device(device)
     self.device = device
 end
 
+local function window_check_draw(self, shape)
+    if self.shape then
+        return collision.box_box(self.shape, shape)
+    end
+
+    return true
+end
+
+---Draw a text gizmo.
+---@param point  box_2  # The point of the gizmo.
+---@param label  string # The label of the gizmo.
+---@param font   string # The font of the gizmo.
+---@param scale  number # The text scale of the gizmo.
+---@param space  number # The text space of the gizmo.
+---@param color  number # The text color of the gizmo.
+---@return boolean click # True on click, false otherwise.
+function window:text(point, label, font, scale, space, color, call_back, call_data)
+    -- scroll.
+    point.y = point.y + self.point
+
+    if window_check_draw(self, box_2:old(point.x, point.y, 1.0, scale)) then
+        font:draw(label, point, scale, space, color)
+    end
+end
+
 ---Draw a button gizmo.
 ---@param shape box_2      # The shape of the gizmo.
 ---@param label string     # The label of the gizmo.
 ---@param flag? gizmo_flag # OPTIONAL: The flag of the gizmo.
 ---@return boolean click # True on click, false otherwise.
 function window:button(shape, label, flag, call_back, call_data)
+    -- scroll.
+    shape.y = shape.y + self.point
+
     -- get the state of this gizmo.
     local hover, index, focus, click = window_state(self, shape, flag)
 
-    if call_back then
-        call_back(call_data, self, shape, hover, index, focus, label)
-    else
-        -- draw a border.
-        window_border(self, shape, hover, index, focus, label)
+    if window_check_draw(self, shape) then
+        if call_back then
+            call_back(call_data, self, shape, hover, index, focus, label)
+        else
+            -- draw a border.
+            window_border(self, shape, hover, index, focus, label)
+        end
     end
 
     -- return true on click.
@@ -2754,6 +2826,9 @@ end
 ---@return number  value # The value.
 ---@return boolean click # True on click, false otherwise.
 function window:toggle(shape, label, value, flag, call_back, call_data)
+    -- scroll.
+    shape.y = shape.y + self.point
+
     -- get the state of this gizmo.
     local hover, index, focus, click = window_state(self, shape, flag)
 
@@ -2762,17 +2837,19 @@ function window:toggle(shape, label, value, flag, call_back, call_data)
         value = not value
     end
 
-    if call_back then
-        call_back(call_data, self, shape, hover, index, focus, label, value)
-    else
-        -- draw a border, with a text off-set.
-        window_border(self, shape, hover, index, focus, label, vector_2:old(shape.width, 0.0))
+    if window_check_draw(self, shape) then
+        if call_back then
+            call_back(call_data, self, shape, hover, index, focus, label, value)
+        else
+            -- draw a border, with a text off-set.
+            window_border(self, shape, hover, index, focus, label, vector_2:old(shape.width, 0.0))
 
-        -- if value is set on, draw a small box to indicate so.
-        if value then
-            quiver.draw_2d.draw_box_2_border(
-                box_2:old(shape.x + 6.0, shape.y + 6.0, shape.width - 12.0, shape.height - 12.0), false,
-                BORDER_COLOR_D)
+            -- if value is set on, draw a small box to indicate so.
+            if value then
+                quiver.draw_2d.draw_box_2_border(
+                    box_2:old(shape.x + 6.0, shape.y + 6.0, shape.width - 12.0, shape.height - 12.0), false,
+                    BORDER_COLOR_D)
+            end
         end
     end
 
@@ -2791,6 +2868,14 @@ end
 ---@return number  value # The value.
 ---@return boolean click # True on click, false otherwise.
 function window:slider(shape, label, value, min, max, step, flag, call_back, call_data)
+    -- scroll.
+    shape.y = shape.y + self.point
+
+    -- click on press flag is incompatible with this gizmo, remove if present.
+    if flag then
+        flag = bit.band(flag, bit.bnot(GIZMO_FLAG.CLICK_ON_PRESS))
+    end
+
     -- get the state of this gizmo.
     local hover, index, focus, click, which = window_state(self, shape, flag, WINDOW_ACTION_LATERAL)
 
@@ -2827,32 +2912,34 @@ function window:slider(shape, label, value, min, max, step, flag, call_back, cal
         end
     end
 
-    -- get the percentage of the value within the minimum/maximum range.
-    local percentage = math.percentage_from_value(min, max, value)
+    if window_check_draw(self, shape) then
+        -- get the percentage of the value within the minimum/maximum range.
+        local percentage = math.percentage_from_value(min, max, value)
 
-    if call_back then
-        call_back(call_data, self, shape, hover, index, focus, label, value, percentage)
-    else
-        -- draw a border, with a text off-set.
-        window_border(self, shape, hover, index, focus, label, vector_2:old(shape.width, 0.0),
-            function() window_glyph(self, "board", "mouse", "pad") end)
+        if call_back then
+            call_back(call_data, self, shape, hover, index, focus, label, value, percentage)
+        else
+            -- draw a border, with a text off-set.
+            window_border(self, shape, hover, index, focus, label, vector_2:old(shape.width, 0.0),
+                function() window_glyph(self, "board", "mouse", "pad") end)
 
-        -- if percentage is above 0.0...
-        if percentage > 0.0 then
-            quiver.draw_2d.draw_box_2_border(
-                box_2:old(shape.x + 6.0, shape.y + 6.0, (shape.width - 12.0) * percentage, shape.height - 12.0),
-                false,
-                BORDER_COLOR_D)
+            -- if percentage is above 0.0...
+            if percentage > 0.0 then
+                quiver.draw_2d.draw_box_2_border(
+                    box_2:old(shape.x + 6.0, shape.y + 6.0, (shape.width - 12.0) * percentage, shape.height - 12.0),
+                    false,
+                    BORDER_COLOR_D)
+            end
+
+            -- measure text.
+            local measure = LOGGER_FONT:measure_text(value, LOGGER_FONT_SCALE, LOGGER_FONT_SPACE)
+
+            -- draw value.
+            LOGGER_FONT:draw(value, vector_2:old(shape.x + (shape.width * 0.5) - (measure * 0.5), shape.y + 4.0),
+                LOGGER_FONT_SCALE,
+                LOGGER_FONT_SPACE,
+                color:white())
         end
-
-        -- measure text.
-        local measure = LOGGER_FONT:measure_text(value, LOGGER_FONT_SCALE, LOGGER_FONT_SPACE)
-
-        -- draw value.
-        LOGGER_FONT:draw(value, vector_2:old(shape.x + (shape.width * 0.5) - (measure * 0.5), shape.y + 4.0),
-            LOGGER_FONT_SCALE,
-            LOGGER_FONT_SPACE,
-            color:white())
     end
 
     -- return value, and click.
@@ -2868,6 +2955,9 @@ end
 ---@return number  value # The value.
 ---@return boolean click # True on click, false otherwise.
 function window:switch(shape, label, value, pool, flag, call_back, call_data)
+    -- scroll.
+    shape.y = shape.y + self.point
+
     -- get the state of this gizmo.
     local hover, index, focus, click, which = window_state(self, shape, flag, WINDOW_ACTION_LATERAL)
 
@@ -2907,20 +2997,22 @@ function window:switch(shape, label, value, pool, flag, call_back, call_data)
         end
     end
 
-    if call_back then
-        call_back(call_data, self, shape, hover, index, focus, label, value_label)
-    else
-        -- draw a border, with a text off-set.
-        window_border(self, shape, hover, index, focus, label, vector_2:old(shape.width, 0.0))
+    if window_check_draw(self, shape) then
+        if call_back then
+            call_back(call_data, self, shape, hover, index, focus, label, value_label)
+        else
+            -- draw a border, with a text off-set.
+            window_border(self, shape, hover, index, focus, label, vector_2:old(shape.width, 0.0))
 
-        -- measure text.
-        local measure = LOGGER_FONT:measure_text(value_label, LOGGER_FONT_SCALE, LOGGER_FONT_SPACE)
+            -- measure text.
+            local measure = LOGGER_FONT:measure_text(value_label, LOGGER_FONT_SCALE, LOGGER_FONT_SPACE)
 
-        -- draw value.
-        LOGGER_FONT:draw(value_label, vector_2:old(shape.x + (shape.width * 0.5) - (measure * 0.5), shape.y + 4.0),
-            LOGGER_FONT_SCALE,
-            LOGGER_FONT_SPACE,
-            color:white())
+            -- draw value.
+            LOGGER_FONT:draw(value_label, vector_2:old(shape.x + (shape.width * 0.5) - (measure * 0.5), shape.y + 4.0),
+                LOGGER_FONT_SCALE,
+                LOGGER_FONT_SPACE,
+                color:white())
+        end
     end
 
     -- return value, and click.
@@ -2935,6 +3027,9 @@ end
 ---@param flag?   gizmo_flag # The flag of the gizmo.
 ---@return boolean click # True on click, false otherwise.
 function window:action(shape, label, value, clamp, flag, call_back, call_data)
+    -- scroll.
+    shape.y = shape.y + self.point
+
     local pick = false
 
     -- if pick gizmo is not nil...
@@ -2995,29 +3090,31 @@ function window:action(shape, label, value, clamp, flag, call_back, call_data)
         end
     end
 
-    if call_back then
-        call_back(call_data, self, shape, hover, index, focus, label, value)
-    else
-        -- draw a border.
-        window_border(self, shape, hover, index, focus, label, vector_2:old(shape.width, 0.0))
+    if window_check_draw(self, shape) then
+        if call_back then
+            call_back(call_data, self, shape, hover, index, focus, label, value)
+        else
+            -- draw a border.
+            window_border(self, shape, hover, index, focus, label, vector_2:old(shape.width, 0.0))
 
-        local label = #value.list > 0.0 and "" or "N/A"
+            local label = #value.list > 0.0 and "" or "N/A"
 
-        -- for every button in the action's list...
-        for i, button in ipairs(value.list) do
-            -- concatenate the button's name.
-            label = label .. (i > 1.0 and "/" or "")
-                .. button:name()
+            -- for every button in the action's list...
+            for i, button in ipairs(value.list) do
+                -- concatenate the button's name.
+                label = label .. (i > 1.0 and "/" or "")
+                    .. button:name()
+            end
+
+            -- measure text.
+            local measure = LOGGER_FONT:measure_text(label, LOGGER_FONT_SCALE, LOGGER_FONT_SPACE)
+
+            -- draw value.
+            LOGGER_FONT:draw(label, vector_2:old(shape.x + (shape.width * 0.5) - (measure * 0.5), shape.y + 4.0),
+                LOGGER_FONT_SCALE,
+                LOGGER_FONT_SPACE,
+                color:white())
         end
-
-        -- measure text.
-        local measure = LOGGER_FONT:measure_text(label, LOGGER_FONT_SCALE, LOGGER_FONT_SPACE)
-
-        -- draw value.
-        LOGGER_FONT:draw(label, vector_2:old(shape.x + (shape.width * 0.5) - (measure * 0.5), shape.y + 4.0),
-            LOGGER_FONT_SCALE,
-            LOGGER_FONT_SPACE,
-            color:white())
     end
 
     return click
@@ -3031,6 +3128,9 @@ end
 ---@param flag?   gizmo_flag # The flag of the gizmo.
 ---@return boolean click # True on click, false otherwise.
 function window:entry(shape, label, value, flag)
+    -- scroll.
+    shape.y = shape.y + self.point
+
     local pick = false
 
     -- if pick gizmo is not nil...
@@ -3081,6 +3181,66 @@ function window:entry(shape, label, value, flag)
         color:white())
 
     return value
+end
+
+---Draw a scroll gizmo.
+---@param shape box_2    # The shape of the gizmo.
+---@param value number   # The value of the gizmo.
+---@param last  number   # The value of the gizmo.
+---@param call  function # The draw function.
+function window:scroll(shape, value, last, call, call_back, call_data)
+    if call_back then
+        call_back(call_data, self, shape, value, last)
+    end
+
+    local view_size = math.min(0.0, shape.height - last)
+    self.point = view_size * value
+    self.shape = shape
+    self.last = 0.0
+
+    local begin = self.count
+
+    --quiver.draw.begin_scissor(call, shape)
+
+    call()
+
+    local close = self.count
+
+    last = (self.last - shape.y) - self.point
+
+    self.point = 0.0
+    self.shape = nil
+    self.last = 0.0
+
+    if self.gizmo then
+        if self.index >= begin and self.index <= close then
+            if self.gizmo.y < shape.y then
+                local subtract = shape.y - self.gizmo.y
+
+                value = math.clamp(0.0, 1.0, value + (subtract / view_size))
+            end
+
+            if self.gizmo.y + self.gizmo.height > shape.y + shape.height then
+                local subtract = (self.gizmo.y + self.gizmo.height) - (shape.y + shape.height)
+
+                value = math.clamp(0.0, 1.0, value - (subtract / view_size))
+            end
+        else
+            if self.index < begin then value = 0.0 end
+            if self.index > close then value = 1.0 end
+        end
+    end
+
+    self.gizmo = nil
+
+    local mouse = vector_2:old(quiver.input.mouse.get_point())
+    local delta = vector_2:old(quiver.input.mouse.get_wheel())
+
+    if collision.point_box(mouse, shape) then
+        value = math.clamp(0.0, 1.0, value - delta.y * 0.05)
+    end
+
+    return value, last
 end
 
 -- ================================================================
