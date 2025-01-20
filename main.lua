@@ -15,13 +15,9 @@
 
 require "script/base"
 require "script/status"
-require "script/lobby"
-require "script/inner"
-require "script/outer"
-require "script/user"
-require "script/entity"
-require "script/hunter"
-require "script/weapon"
+require "script/lobby/lobby"
+require "script/inner/inner"
+require "script/outer/outer"
 
 --[[----------------------------------------------------------------]]
 

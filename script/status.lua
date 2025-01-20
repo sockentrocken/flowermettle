@@ -48,6 +48,10 @@ function status:draw()
     -- clear color.
     quiver.draw.clear(color:white())
 
+    if quiver.window.get_resize() then
+        self.lobby.render = quiver.render_texture.new(vector_2:old(quiver.window.get_shape()) * 1.0)
+    end
+
     -- if lobby is active, draw lobby. otherwise, draw in-game state.
     if self.lobby.active then
         self.lobby:draw(self)

@@ -13,6 +13,9 @@
 -- OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 -- PERFORMANCE OF THIS SOFTWARE.
 
+require "script/lobby/editor"
+require "script/lobby/user"
+
 local LAYOUT_POINT = vector_2:new(8.0, 64.0)
 local ACTION_RETURN = action:new(
 	{
@@ -137,6 +140,7 @@ function lobby:new()
 	--[[]]
 
 	i.__type    = "lobby"
+	i.editor    = editor:new()
 	i.user      = user:new(i)
 	i.system    = file_system:new({
 		"asset"
@@ -179,7 +183,7 @@ function lobby:new()
 	i.scroll_last   = 0.0
 	i.time          = 0.0
 
-	i.render        = quiver.render_texture.new(vector_2:old(quiver.window.get_render_shape()) * 0.50)
+	i.render        = quiver.render_texture.new(vector_2:old(quiver.window.get_shape()) * 1.0)
 	i.shader        = quiver.shader.new("asset/video/shader/base.vs", "asset/video/shader/vignette.fs")
 
 	collectgarbage("collect")
@@ -484,6 +488,10 @@ local function layout_main(self, status)
 			change_layout(self, LOBBY_LAYOUT.MAIN)
 		end; y = y + 1.0
 	end
+
+	if lobby_button(status, box_2:old(LAYOUT_POINT.x, LAYOUT_POINT.y + 36.0 * y, 256.0, 32.0), "Editor") then
+		change_layout(self, LOBBY_LAYOUT.EDITOR)
+	end; y = y + 1.0
 
 	if lobby_button(status, box_2:old(LAYOUT_POINT.x, LAYOUT_POINT.y + 36.0 * y, 256.0, 32.0), "Exit") then
 		change_layout(self, LOBBY_LAYOUT.EXIT)
@@ -807,19 +815,23 @@ function lobby:draw(status)
 
 		-- draw 3D view.
 		quiver.draw_3d.begin(function()
-			local point = LAYOUT_CAMERA_DATA[self.layout].point
-			local focus = LAYOUT_CAMERA_DATA[self.layout].focus
+			if self.layout == LOBBY_LAYOUT.EDITOR then
+				self.editor:draw_3d(self, status)
+			else
+				local point = LAYOUT_CAMERA_DATA[self.layout].point
+				local focus = LAYOUT_CAMERA_DATA[self.layout].focus
 
-			self.ease_point:copy(self.ease_point + (point - self.camera_3d.point) * delta * 8.0)
-			self.ease_focus:copy(self.ease_focus + (focus - self.camera_3d.focus) * delta * 8.0)
+				self.ease_point:copy(self.ease_point + (point - self.camera_3d.point) * delta * 8.0)
+				self.ease_focus:copy(self.ease_focus + (focus - self.camera_3d.focus) * delta * 8.0)
 
-			-- update the camera.
-			self.camera_3d.point:copy(self.ease_point)
-			self.camera_3d.focus:copy(self.ease_focus)
-			self.camera_3d.zoom = 45.0
+				-- update the camera.
+				self.camera_3d.point:copy(self.ease_point)
+				self.camera_3d.focus:copy(self.ease_focus)
+				self.camera_3d.zoom = 45.0
 
-			local model = self.system:get_model("video/menu.glb")
-			model:draw(vector_3:zero(), 1.0, color:white())
+				local model = self.system:get_model("video/menu.glb")
+				model:draw(vector_3:zero(), 1.0, color:white())
+			end
 		end, self.camera_3d)
 	end)
 
@@ -836,24 +848,28 @@ function lobby:draw(status)
 	quiver.draw_2d.begin(function()
 		self.window:begin()
 
-		-- select a layout to draw.
-		if self.layout == LOBBY_LAYOUT.MAIN then
-			layout_main(self, status)
-		elseif self.layout == LOBBY_LAYOUT.MISSION then
-			layout_mission(self, status)
-		elseif self.layout == LOBBY_LAYOUT.HUNTER then
-			layout_hunter(self, status)
-		elseif self.layout == LOBBY_LAYOUT.WEAPON then
-			layout_weapon(self, status)
-		elseif self.layout == LOBBY_LAYOUT.CONFIGURATION then
-			layout_configuration(self, status)
-		elseif self.layout == LOBBY_LAYOUT.EXIT then
-			layout_exit(self, status)
+		if self.layout == LOBBY_LAYOUT.EDITOR then
+			self.editor:draw_2d(self, status)
+		else
+			-- select a layout to draw.
+			if self.layout == LOBBY_LAYOUT.MAIN then
+				layout_main(self, status)
+			elseif self.layout == LOBBY_LAYOUT.MISSION then
+				layout_mission(self, status)
+			elseif self.layout == LOBBY_LAYOUT.HUNTER then
+				layout_hunter(self, status)
+			elseif self.layout == LOBBY_LAYOUT.WEAPON then
+				layout_weapon(self, status)
+			elseif self.layout == LOBBY_LAYOUT.CONFIGURATION then
+				layout_configuration(self, status)
+			elseif self.layout == LOBBY_LAYOUT.EXIT then
+				layout_exit(self, status)
+			end
 		end
 
 		-- draw logger.
 		self.logger:draw(self.window)
 
-		self.window:close(not self.active)
+		self.window:close(self.layout == LOBBY_LAYOUT.EDITOR)
 	end, self.camera_2d)
 end

@@ -569,11 +569,11 @@ function math.value_from_percentage(min, max, value)
 end
 
 ---Snap a value to a given step.
----@param step number # Step.
+---@param step  number # Step.
 ---@param value number # Input value.
 ---@return number value # Value.
-function math.snap(snap, value)
-    return math.floor(value / snap) * snap
+function math.snap(step, value)
+    return math.floor(value / step) * step
 end
 
 ---Get a random variation of a given value, which can either be positive or negative.
@@ -1029,6 +1029,28 @@ function vector_3:normalize()
     end
 end
 
+---Snap the current to a given step.
+---@param step number # Step.
+---@return vector_3 value # The vector.
+function vector_3:snap(step)
+    return vector_3:old(
+        math.snap(step, self.x),
+        math.snap(step, self.y),
+        math.snap(step, self.z)
+    )
+end
+
+---Interpolate the current vector.
+---@param value vector_3 # The vector to interpolate to.
+---@return vector_3 value # The vector.
+function vector_3:interpolate(value, time)
+    return vector_3:old(
+        math.interpolate(self.x, value.x, time),
+        math.interpolate(self.y, value.y, time),
+        math.interpolate(self.z, value.z, time)
+    )
+end
+
 ---Rotate the current vector by an axis and an angle.
 ---@param axis  vector_3 # The axis.
 ---@param angle number # The angle.
@@ -1295,6 +1317,10 @@ function box_3:old(min, max)
     i.min = min
     i.max = max
     return i
+end
+
+function box_3:translate(value)
+    return box_3:old(self.min + value, self.max + value)
 end
 
 box_3_pool = table_pool:new(box_3, POOL_BOX_3_AMOUNT)

@@ -6,6 +6,3 @@ user.json
 
 # LSP data.
 script/_meta.lua
-
-# Bash script helper.
-build.sh

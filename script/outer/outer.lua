@@ -13,6 +13,11 @@
 -- OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 -- PERFORMANCE OF THIS SOFTWARE.
 
+require "script/outer/entity"
+require "script/outer/player"
+require "script/outer/projectile"
+require "script/outer/enemy"
+
 local TIME_STEP = 1.0 / 60.0
 
 ---@class outer
@@ -44,7 +49,6 @@ function outer:new(status, level)
 	i.entity       = {}
 	i.entity_index = 1.0
 	i.rapier       = quiver.rapier:new()
-
 
 	--[[]]
 

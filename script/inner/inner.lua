@@ -13,6 +13,9 @@
 -- OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 -- PERFORMANCE OF THIS SOFTWARE.
 
+require "script/inner/hunter"
+require "script/inner/weapon"
+
 ---@class inner
 inner = {
 	__meta = {}

@@ -25,6 +25,11 @@ local WEAPON_NAME = {
 }
 
 ---@class weapon
+---@field name string
+---@field ammo string
+---@field ammo_maximum string
+---@field miss_rate string
+---@field fire_rate string
 weapon = {
 	__meta = {}
 }

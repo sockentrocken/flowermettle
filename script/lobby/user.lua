@@ -133,8 +133,10 @@ function user:apply(status)
         quiver.window.set_state(WINDOW_FLAG.RESIZABLE, true)
     end
 
-    -- set the shape of the window to be the same as the current monitor's shape.
-    quiver.window.set_shape(vector_2:old(quiver.window.get_screen_shape(quiver.window.get_screen_focus())))
+    if self.video_full then
+        -- set the shape of the window to be the same as the current monitor's shape.
+        quiver.window.set_shape(vector_2:old(quiver.window.get_screen_shape(quiver.window.get_screen_focus())))
+    end
 
     -- set full-screen mode.
     quiver.window.set_state(WINDOW_FLAG.FULLSCREEN_MODE, self.video_full)
