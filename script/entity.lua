@@ -14,6 +14,7 @@
 -- PERFORMANCE OF THIS SOFTWARE.
 
 ---@class entity
+---@field which number
 ---@field index number
 ---@field point vector_3
 ---@field angle vector_3
@@ -60,13 +61,28 @@ end
 function entity:attach_collider(status, shape)
 	self.collider = status.outer.rapier:collider_builder_cuboid(shape)
 	status.outer.rapier:set_collider_translation(self.collider, self.point)
-	status.outer.rapier:set_collider_user_data(self.collider, self.index + 1)
+	status.outer.rapier:set_collider_user_data(self.collider, self.index)
 end
 
 function entity:detach_collider(status)
 	if self.collider then
 		status.outer.rapier:collider_remove(self.collider, true)
 	end
+end
+
+---@class entity_pointer
+---@field number
+---@field number
+entity_pointer = {}
+
+---Create a new entity pointer.
+---@param entity entity # The entity.
+---@return entity_pointer value # The entity pointer.
+function entity_pointer:new(entity)
+	return {
+		which = entity.which,
+		index = entity.index
+	}
 end
 
 --[[----------------------------------------------------------------]]
@@ -99,7 +115,7 @@ function enemy:draw_3d(status)
 	model:draw(self.point - vector_3:old(0.0, 1.0, 0.0), 0.5, color:red())
 end
 
-function enemy:hurt(status, damage)
+function enemy:hurt(status, source, damage)
 	self.health = self.health - damage
 
 	if self.health < 0.0 then
@@ -139,11 +155,15 @@ function projectile:tick(status, step)
 	if test then
 		local user = status.outer.rapier:get_collider_user_data(test)
 
-		if not (user == self.parent) then
-			local other = status.outer.entity[tostring(user - 1.0)]
+		print(user .. ":" .. self.parent.index)
 
-			if other and other.hurt then
-				other:hurt(status, 25.0)
+		if not (user == self.parent.index) then
+			local other = status.outer:entity_find_index(status, user)
+
+			if other then
+				if other.hurt then
+					other:hurt(status, self, 25.0)
+				end
 			end
 
 			status.outer:entity_detach(status, self)
@@ -221,7 +241,7 @@ end
 
 function player:aim(status)
 	local where = nil
-	local shape = vector_2:old(quiver.window.get_render_shape()) * 0.5
+	local shape = vector_2:old(quiver.window.get_shape()) * 0.5
 
 	if status.lobby.window.device == INPUT_DEVICE.PAD then
 		local axis_x = quiver.input.pad.get_axis_state(0.0, 2.0)
@@ -229,7 +249,7 @@ function player:aim(status)
 		where = vector_2:old(axis_x, axis_y) * 256.0
 	else
 		local mouse = vector_2:old(quiver.input.mouse.get_point())
-		local shape = vector_2:old(quiver.window.get_render_shape()) * 0.5
+		local shape = vector_2:old(quiver.window.get_shape()) * 0.5
 		where = (mouse - shape)
 	end
 
@@ -249,13 +269,18 @@ function player:tick(status, step)
 		movement.x = quiver.input.pad.get_axis_state(0.0, 0.0)
 		movement.z = quiver.input.pad.get_axis_state(0.0, 1.0)
 	else
-		movement.x = status.lobby.user.input_move_y_a:down() and -1.0 or movement.x
-		movement.x = status.lobby.user.input_move_y_b:down() and 1.00 or movement.x
-		movement.z = status.lobby.user.input_move_x_a:down() and -1.0 or movement.z
-		movement.z = status.lobby.user.input_move_x_b:down() and 1.00 or movement.z
+		movement.x = status.lobby.user.input_move_y_a:down() and -8.0 or movement.x
+		movement.x = status.lobby.user.input_move_y_b:down() and 8.00 or movement.x
+		movement.z = status.lobby.user.input_move_x_a:down() and -8.0 or movement.z
+		movement.z = status.lobby.user.input_move_x_b:down() and 8.00 or movement.z
 	end
 
-	movement = movement * PLAYER_SPEED_MAX
+	local d_x, _, d_z = math.direction_from_euler(vector_3:old(self.angle.x, 0.0, 0.0))
+
+	if quiver.input.board.get_down(INPUT_BOARD.TAB) then
+		movement = (d_x * -movement.z) + (d_z * -movement.x)
+	end
+
 	local wish_where = movement:normalize()
 	local wish_speed = movement:magnitude()
 
@@ -286,21 +311,44 @@ function player:draw_3d(status)
 
 	local delta          = quiver.general.get_frame_time()
 	local shake          = vector_3:old(
-		math.random_sign(self.camera_shake * 2.0 + status.lobby.user.video_shake * average * 0.1),
-		math.random_sign(self.camera_shake * 2.0 + status.lobby.user.video_shake * average * 0.1),
-		math.random_sign(self.camera_shake * 2.0 + status.lobby.user.video_shake * average * 0.1)
+		math.random_sign(self.camera_shake + average * 0.1) * status.lobby.user.video_shake,
+		math.random_sign(self.camera_shake + average * 0.1) * status.lobby.user.video_shake,
+		math.random_sign(self.camera_shake + average * 0.1) * status.lobby.user.video_shake
 	)
 
-	-- update the camera.
-	local camera_point   = self.point + CAMERA_FOLLOW_POINT + (aim * magnitude * 0.01)
-	self.camera_point:copy(self.camera_point +
-		(camera_point - status.outer.camera_3d.point) * delta * CAMERA_FOLLOW_SPEED)
-	self.camera_shake = math.max(0.0, self.camera_shake - delta)
-	status.outer.camera_3d.point:copy(self.camera_point + shake + CAMERA_FOLLOW_POINT)
-	status.outer.camera_3d.focus:copy(self.camera_point + shake)
-	status.outer.camera_3d.zoom = 90.0
+	if quiver.input.board.get_press(INPUT_BOARD.TAB) then
+		status.outer.camera_3d.point:copy(self.point)
+		status.outer.camera_3d.focus:copy(self.point + vector_3:old(1.0, 0.0, 0.0))
+		quiver.input.mouse.set_active(false)
+	end
 
-	status.outer.camera_2d.shift:copy(shake * 64.0)
+	if quiver.input.board.get_release(INPUT_BOARD.TAB) then
+		quiver.input.mouse.set_active(true)
+		quiver.input.mouse.set_hidden(true)
+	end
+
+	if quiver.input.board.get_down(INPUT_BOARD.TAB) then
+		local x, y = quiver.input.mouse.get_delta()
+
+		self.angle.x = self.angle.x - x * 0.1
+		self.angle.y = self.angle.y + y * 0.1
+
+		local d_x = math.direction_from_euler(self.angle)
+
+		status.outer.camera_3d.point:copy(self.point + shake)
+		status.outer.camera_3d.focus:copy(self.point + shake + d_x)
+	else
+		-- update the camera.
+		local camera_point = self.point + CAMERA_FOLLOW_POINT + (aim * magnitude * 0.01)
+		self.camera_point:copy(self.camera_point +
+			(camera_point - status.outer.camera_3d.point) * delta * CAMERA_FOLLOW_SPEED)
+		status.outer.camera_3d.point:copy(self.camera_point + shake + CAMERA_FOLLOW_POINT)
+		status.outer.camera_3d.focus:copy(self.camera_point + shake)
+	end
+
+	self.camera_shake = math.max(0.0, self.camera_shake - delta * self.camera_shake * 8.0)
+
+	status.outer.camera_2d.shift:copy(shake * 16.0)
 
 	local x, y = quiver.input.mouse.get_point()
 	local ray = quiver.draw_3d.get_screen_to_world(status.outer.camera_3d, vector_2:old(x, y),
@@ -357,9 +405,15 @@ function player:draw_2d(status)
 		where = vector_2:old(quiver.input.mouse.get_point())
 	end
 
+	local x, y = quiver.window.get_render_shape()
+
 	local cross = status.outer.system:get_texture("video/cross.png")
 
-	cross:draw(where - (vector_2:old(cross.shape_x, cross.shape_y) * (average + 1.0) * 0.5), 0.0, 1.0 + average,
+	if quiver.input.board.get_down(INPUT_BOARD.TAB) then
+		where = vector_2:old(x, y) * 0.5
+	end
+
+	cross:draw(where - (vector_2:old(cross.shape_x, cross.shape_y) * 0.75 * (average + 1.0) * 0.5), 0.0, 0.75 + average,
 		color:red())
 
 	-- draw hunter, weapon.

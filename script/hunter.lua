@@ -63,8 +63,10 @@ end
 ---Draw the hunter.
 ---@param status status # The game status.
 function hunter:draw_3d(status)
-	local model = status.outer.system:get_model("video/character.glb")
-	model:draw(status.outer.player.point - vector_3:old(0.0, 1.0, 0.0), 0.5, color:blue())
+	if not quiver.input.board.get_down(INPUT_BOARD.TAB) then
+		local model = status.outer.system:get_model("video/character.glb")
+		model:draw(status.outer.player.point - vector_3:old(0.0, 1.0, 0.0), 0.5, color:blue())
+	end
 end
 
 ---Draw the hunter.

@@ -44,7 +44,7 @@ function weapon:new(status)
 	i.ammo         = 25.0
 	i.ammo_maximum = 25.0
 	i.miss_rate    = 1.00
-	i.fire_rate    = 10.00
+	i.fire_rate    = 4.00
 	i.rate         = 0.00
 	i.miss         = 0.00
 
@@ -89,23 +89,30 @@ end
 
 function weapon:use(status, side)
 	if self.ammo > 0.0 and self.rate == 0.0 then
-		local x, y = quiver.input.mouse.get_point()
-		local ray = quiver.draw_3d.get_screen_to_world(status.outer.camera_3d, vector_2:old(x, y),
-			vector_2:old(quiver.window.get_shape()))
+		local aim = nil
 
-		local collider, time = status.outer.rapier:cast_ray(ray, 4096.0, true, status.outer.level_rigid)
+		if quiver.input.board.get_down(INPUT_BOARD.TAB) then
+			aim = math.direction_from_euler(status.outer.player.angle)
+		else
+			local x, y = quiver.input.mouse.get_point()
+			local ray = quiver.draw_3d.get_screen_to_world(status.outer.camera_3d, vector_2:old(x, y),
+				vector_2:old(quiver.window.get_shape()))
 
-		local aim = status.outer.player:aim(status)
+			local collider, time = status.outer.rapier:cast_ray(ray, 4096.0, true, status.outer.level_rigid)
 
-		if collider then
-			local c_point = vector_3:old(status.outer.rapier:get_collider_translation(collider))
-			aim = (c_point - status.outer.player.point):normalize()
+			aim = status.outer.player:aim(status)
+
+			if collider then
+				local c_point = vector_3:old(status.outer.rapier:get_collider_translation(collider))
+				aim = (c_point - status.outer.player.point):normalize()
+			end
 		end
 
 		local i = projectile:new(status)
 		i:set_point(status, status.outer.player.point)
 		i.speed:copy(aim * 32.0)
-		i.parent = status.outer.rapier:get_collider_user_data(status.outer.player.collider)
+		i.parent = entity_pointer:new(status.outer.player)
+		--status.outer.rapier:get_collider_user_data(status.outer.player.collider)
 		status.outer.player.camera_shake = 0.05
 		--self.ammo = self.ammo - 1.00
 		self.rate = self.rate + (0.50 / self.fire_rate)

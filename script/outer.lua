@@ -42,7 +42,7 @@ function outer:new(status, level)
 	i.time         = 0.0
 	i.step         = 0.0
 	i.entity       = {}
-	i.entity_index = 0.0
+	i.entity_index = 1.0
 	i.rapier       = quiver.rapier:new()
 
 
@@ -76,15 +76,18 @@ function outer:new(status, level)
 		end
 	end
 
-	enemy:new(status, {
-		point = vector_3:new(16.0, 0.0, -4.0)
-	})
-	enemy:new(status, {
-		point = vector_3:new(16.0, 0.0, 0.0)
-	})
-	enemy:new(status, {
-		point = vector_3:new(16.0, 0.0, 4.0)
-	})
+	for x = 0, 4 do
+		enemy:new(status, {
+			point = vector_3:new(16.0 + x * 4.0, 0.0, -4.0)
+		})
+		enemy:new(status, {
+			point = vector_3:new(16.0 + x * 4.0, 0.0, 0.0)
+		})
+		enemy:new(status, {
+			point = vector_3:new(16.0 + x * 4.0, 0.0, 4.0)
+		})
+	end
+
 	enemy:new(status, {
 		point = vector_3:new(32.0, 1.0, 0.0)
 	})
@@ -98,10 +101,11 @@ end
 ---@param attach entity # The entity to attach.
 function outer:entity_attach(status, attach)
 	-- add index to entity.
+	attach.which = #self.entity + 1.0
 	attach.index = self.entity_index
 
 	-- add entity to table.
-	self.entity[tostring(attach.index)] = attach
+	table.insert(self.entity, attach)
 
 	-- increase index.
 	self.entity_index = self.entity_index + 1.0
@@ -110,10 +114,46 @@ end
 ---Detach an entity.
 ---@param detach entity # The entity to detach.
 function outer:entity_detach(status, detach)
-	self.entity[tostring(detach.index)]:detach_collider(status)
+	if detach then
+		detach:detach_collider(status)
 
-	-- remove entity from table.
-	self.entity[tostring(detach.index)] = nil
+		print("detach.which = " .. detach.which)
+
+		table.remove_object(self.entity, detach)
+	end
+end
+
+---Find an entity using an entity pointer.
+---@param pointer entity_pointer # The entity pointer.
+---@return entity | nil value # The entity.
+function outer:entity_find(status, pointer)
+	-- if there is an entity at the given slot...
+	if self.entity[pointer.which] then
+		local entity = self.entity[pointer.which]
+
+		-- if the entity in the slot's index is the same as the pointer's...
+		if entity.index == pointer.index then
+			-- return entity.
+			return entity
+		end
+	end
+
+	-- no entity found, return nil.
+	return nil
+end
+
+---Find an entity by entity index.
+---@param index number # The entity index.
+---@return entity | nil value # The entity.
+function outer:entity_find_index(status, index)
+	for _, entity in ipairs(self.entity) do
+		if entity.index == index then
+			return entity
+		end
+	end
+
+	-- no entity found, return nil.
+	return nil
 end
 
 local ACTION_TOGGLE = action:new(
@@ -172,29 +212,45 @@ function outer:draw(status)
 	local new_point = vector_3:zero()
 	local new_angle = vector_3:zero()
 
-	quiver.draw_3d.begin(function()
-		for _, entity in pairs(self.entity) do
-			if entity.draw_3d then
-				-- save entity point, angle.
-				new_point:copy(entity.point)
-				new_angle:copy(entity.angle)
+	--[[]]
 
-				-- interpolate old/new point, angle.
-				entity.point:copy(entity.point * alpha + entity.old_point * (1.0 - alpha))
-				entity.angle:copy(entity.angle * alpha + entity.old_angle * (1.0 - alpha))
+	status.lobby.render:begin(function()
+		quiver.draw.clear(color:white())
 
-				entity:draw_3d(status)
+		quiver.draw_3d.begin(function()
+			for _, entity in pairs(self.entity) do
+				if entity.draw_3d then
+					-- TO-DO: changing the angle in draw_3d will be for nothing as "load entity point, angle" will load the data before the call was made.
+					-- be careful with changing point or angle in an entity's draw call.
 
-				-- load entity point, angle.
-				entity.point:copy(new_point)
-				entity.angle:copy(new_angle)
+					-- save entity point, angle.
+					--new_point:copy(entity.point)
+					--new_angle:copy(entity.angle)
+					---- interpolate old/new point, angle.
+					--entity.point:copy(entity.point * alpha + entity.old_point * (1.0 - alpha))
+					--entity.angle:copy(entity.angle * alpha + entity.old_angle * (1.0 - alpha))
+
+					entity:draw_3d(status)
+
+					-- load entity point, angle.
+					--entity.point:copy(new_point)
+					--entity.angle:copy(new_angle)
+				end
 			end
-		end
 
-		self.level:draw(vector_3:zero(), 1.0, color:white())
+			self.level:draw(vector_3:zero(), 1.0, color:white())
 
-		self.rapier:debug_render()
-	end, self.camera_3d)
+			self.rapier:debug_render()
+		end, self.camera_3d)
+	end)
+
+	-- only trigger vignette in first-person?
+	status.lobby.shader:begin(function()
+		local x, y = quiver.window.get_shape()
+
+		status.lobby.render:draw_pro(box_2:old(0.0, 0.0, status.lobby.render.shape_x, -status.lobby.render.shape_y),
+			box_2:old(0.0, 0.0, x, y), vector_2:zero(), 0.0, color:white())
+	end)
 
 	-- clear table pool.
 	table_pool:clear()

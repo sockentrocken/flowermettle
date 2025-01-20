@@ -13,6 +13,7 @@
 -- OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 -- PERFORMANCE OF THIS SOFTWARE.
 
+local LAYOUT_POINT = vector_2:new(8.0, 64.0)
 local ACTION_RETURN = action:new(
 	{
 		action_button:new(INPUT_DEVICE.BOARD, INPUT_BOARD.ESCAPE),
@@ -44,28 +45,28 @@ local LOBBY_LAYOUT = {
 }
 local LAYOUT_CAMERA_DATA = {
 	[LOBBY_LAYOUT.MAIN] = {
-		point = vector_3:old(8.0, 2.5, 0.0),
-		focus = vector_3:old(0.0, 2.0, 0.0)
+		point = vector_3:new(8.0, 2.5, 0.0),
+		focus = vector_3:new(0.0, 2.0, 0.0)
 	},
 	[LOBBY_LAYOUT.MISSION] = {
-		point = vector_3:old(8.0, 2.5, 0.0),
-		focus = vector_3:old(0.0, 2.0, 0.0)
+		point = vector_3:new(-2.0, 1.5, 0.0),
+		focus = vector_3:new(-4.0, 1.5, 0.0)
 	},
 	[LOBBY_LAYOUT.HUNTER] = {
-		point = vector_3:old(8.0, 2.5, 0.0),
-		focus = vector_3:old(0.0, 2.0, 0.0)
+		point = vector_3:new(0.0, 2.5, 0.0),
+		focus = vector_3:new(0.0, 2.0, 4.0)
 	},
 	[LOBBY_LAYOUT.WEAPON] = {
-		point = vector_3:old(8.0, 2.5, 0.0),
-		focus = vector_3:old(0.0, 2.0, 0.0)
+		point = vector_3:new(0.0, 2.5, 0.00),
+		focus = vector_3:new(0.0, 2.0, -4.0)
 	},
 	[LOBBY_LAYOUT.CONFIGURATION] = {
-		point = vector_3:old(8.0, 2.5, 0.0),
-		focus = vector_3:old(0.0, 2.0, 0.0)
+		point = vector_3:new(-2.0, 1.50, 1.0),
+		focus = vector_3:new(-4.0, 1.10, 2.0)
 	},
 	[LOBBY_LAYOUT.EXIT] = {
-		point = vector_3:old(8.0, 2.5, 0.0),
-		focus = vector_3:old(0.0, 2.0, 0.0)
+		point = vector_3:new(8.0, 2.5, 0.0),
+		focus = vector_3:new(0.0, 2.0, 0.0)
 	},
 }
 
@@ -86,8 +87,10 @@ function gizmo:new()
 
 	--[[]]
 
-	i.__type = "gizmo"
-	i.hover  = 0.0
+	i.__type      = "gizmo"
+	i.hover       = 0.0
+	i.sound_hover = false
+	i.sound_focus = false
 
 	return i
 end
@@ -97,17 +100,18 @@ end
 ---@param shape box_2 # The shape.
 function gizmo:move(lobby, shape)
 	-- move shape horizontally.
-	shape.x = shape.x + (self.hover * 8.0)
+	shape.x = shape.x + (ease.out_quad(self.hover) * 8.0) - 16.0 +
+		ease.out_quad(math.min(1.0, lobby.elapse * 4.0)) * 16.0
 
 	return shape
 end
 
 function gizmo:fade(lobby, color)
 	-- fade in/out from hover.
-	color = color * (self.hover * 0.25 + 0.75)
+	color = color * (ease.out_quad(self.hover) * 0.25 + 0.75)
 
 	-- fade in/out from elapse time.
-	color.a = math.floor(math.min(1.0, lobby.elapse * 4.0) * 255.0)
+	color.a = math.floor(ease.out_quad(math.min(1.0, lobby.elapse * 4.0)) * 255.0)
 
 	return color
 end
@@ -138,13 +142,17 @@ function lobby:new()
 		"asset"
 	})
 	i.active    = true
-	i.camera_3d = camera_3d:new(vector_3:new(4.0, 4.0, 4.0), vector_3:new(0.0, 0.0, 0.0), vector_3:new(0.0, 1.0, 0.0),
+	i.camera_3d = camera_3d:new(vector_3:new(8.0, 2.5, 0.0), vector_3:new(0.0, 2.0, 0.0), vector_3:new(0.0, 1.0, 0.0),
 		90.0, CAMERA_3D_KIND.PERSPECTIVE)
 	i.camera_2d = camera_2d:new(vector_2:new(0.0, 0.0), vector_2:new(0.0, 0.0), 0.0, 1.0)
 
 	--[[]]
 
+	i.system:set_font("video/font_main.ttf", 48.0)
 	i.system:set_font("video/font_side.ttf", 24.0)
+
+	i.system:set_sound("audio/_interface_hover.ogg")
+	i.system:set_sound("audio/_interface_click.ogg")
 
 	local tex_a = i.system:set_texture("video/map/black/texture_08.png")
 	local tex_b = i.system:set_texture("video/map/white/texture_08.png")
@@ -169,11 +177,17 @@ function lobby:new()
 	i.elapse        = 0.0
 	i.scroll        = 0.0
 	i.scroll_last   = 0.0
+	i.time          = 0.0
+
+	i.render        = quiver.render_texture.new(vector_2:old(quiver.window.get_render_shape()) * 0.50)
+	i.shader        = quiver.shader.new("asset/video/shader/base.vs", "asset/video/shader/vignette.fs")
+
+	collectgarbage("collect")
 
 	return i
 end
 
-local function gizmo_data(self, label, hover, index, focus)
+local function gizmo_data(self, label, hover, index, focus, click)
 	local delta = quiver.general.get_frame_time()
 
 	if not self.data[label] then
@@ -185,14 +199,31 @@ local function gizmo_data(self, label, hover, index, focus)
 	data.hover = math.clamp(0.0, 1.0,
 		data.hover + ((hover or index or focus) and delta * 8.0 or delta * -8.0))
 
+	if hover or index then
+		if not data.sound_hover then
+			data.sound_hover = true
+			if self.elapse > 0.1 then
+				local sound = self.system:get_sound("audio/_interface_hover.ogg")
+				sound:play()
+			end
+		end
+	else
+		data.sound_hover = false
+	end
+
+	if click then
+		local sound = self.system:get_sound("audio/_interface_click.ogg")
+		sound:play()
+	end
+
 	return data
 end
 
 local function gizmo_fade(self, status, color)
 end
 
-local function button_call_back(status, window, shape, hover, index, focus, label)
-	local gizmo = gizmo_data(status.lobby, label, hover, index, focus)
+local function button_call_back(status, window, shape, hover, index, focus, click, label)
+	local gizmo = gizmo_data(status.lobby, label, hover, index, focus, click)
 	local shape = gizmo:move(status.lobby, shape)
 	local color = gizmo:fade(status.lobby, color:white())
 
@@ -343,27 +374,27 @@ end
 local function scroll_call_back(status, window, shape, value, last)
 	local height = shape.height * math.min(1.0, shape.height / last)
 
-	--if shape.height > height then
-	local color = color:white() * 0.25
+	if shape.height > height then
+		local color = color:white() * 0.25
 
-	-- fade in/out from elapse time.
-	color.a = math.floor(math.min(1.0, status.lobby.elapse * 4.0) * 255.0)
+		-- fade in/out from elapse time.
+		color.a = math.floor(math.min(1.0, status.lobby.elapse * 4.0) * 255.0)
 
-	-- draw border.
-	quiver.draw_2d.draw_box_2_round(shape, 0.05, 4.0, color)
+		-- draw border.
+		quiver.draw_2d.draw_box_2_round(shape, 0.05, 4.0, color)
 
-	local view_size = math.min(0.0, shape.height - last) * value
+		local view_size = math.min(0.0, shape.height - last) * value
 
 
-	-- draw border.
-	quiver.draw_2d.draw_box_2_round(box_2:old(shape.x + shape.width + 8.0, shape.y, 32.0, shape.height), 0.25, 4.0,
-		color)
-	quiver.draw_2d.draw_box_2_round(
-		box_2:old(shape.x + shape.width + 8.0, shape.y + (shape.height - height) * value, 32.0, height),
-		0.25,
-		4.0,
-		color * 1.5)
-	--end
+		-- draw border.
+		quiver.draw_2d.draw_box_2_round(box_2:old(shape.x + shape.width + 8.0, shape.y, 32.0, shape.height), 0.25, 4.0,
+			color)
+		quiver.draw_2d.draw_box_2_round(
+			box_2:old(shape.x + shape.width + 8.0, shape.y + (shape.height - height) * value, 32.0, height),
+			0.25,
+			4.0,
+			color * 1.5)
+	end
 end
 
 local function lobby_scroll(status, shape, value, last, call)
@@ -382,15 +413,21 @@ local function change_layout(self, layout)
 	self.scroll = 0.0
 	self.scroll_last = 0.0
 	self.window.index = 0.0
+	self.data = {}
+end
+
+local function header_label(self, label)
+	local font = self.system:get_font("video/font_main.ttf")
+	font:draw(label, vector_2:old(8.0, 8.0), 48.0, 1.0, color:white())
 end
 
 ---Draw a return button header, as well as check for a lobby toggle.
 ---@param self   lobby   	   # The lobby.
 ---@param status status   	   # The status.
 ---@param former LOBBY_LAYOUT # The former lobby layout.
-local function header_return(self, status, former)
+local function header_input(self, status, former)
 	-- if button is set off or the return action has been set off...
-	if lobby_button(status, box_2:old(8.0, 12.0, 142.0, 32.0), "Return") or ACTION_RETURN:press(self.window.device) then
+	if lobby_button(status, box_2:old(LAYOUT_POINT.x, LAYOUT_POINT.y, 142.0, 32.0), "Return") or ACTION_RETURN:press(self.window.device) then
 		-- set the current layout to the former layout.
 		change_layout(self, former)
 	end
@@ -400,6 +437,8 @@ end
 ---@param self   lobby # The lobby.
 ---@param status status # The status.
 local function layout_main(self, status)
+	header_label(self, "Flowermettle")
+
 	local y = 0.0
 
 	local check, which = ACTION_RETURN:press()
@@ -416,35 +455,37 @@ local function layout_main(self, status)
 	end
 
 	if status.inner then
-		if lobby_button(status, box_2:old(8.0, 12.0 + 36.0 * y, 256.0, 32.0), "Mission") then
+		if lobby_button(status, box_2:old(LAYOUT_POINT.x, LAYOUT_POINT.y + 36.0 * y, 256.0, 32.0), "Mission") then
 			change_layout(self, LOBBY_LAYOUT.MISSION)
 		end; y = y + 1.0
-		if lobby_button(status, box_2:old(8.0, 12.0 + 36.0 * y, 256.0, 32.0), "Hunter Cust.") then
+		if lobby_button(status, box_2:old(LAYOUT_POINT.x, LAYOUT_POINT.y + 36.0 * y, 256.0, 32.0), "Hunter Cust.") then
 			change_layout(self, LOBBY_LAYOUT.HUNTER)
 		end; y = y + 1.0
-		if lobby_button(status, box_2:old(8.0, 12.0 + 36.0 * y, 256.0, 32.0), "Weapon Cust.") then
+		if lobby_button(status, box_2:old(LAYOUT_POINT.x, LAYOUT_POINT.y + 36.0 * y, 256.0, 32.0), "Weapon Cust.") then
 			change_layout(self, LOBBY_LAYOUT.WEAPON)
 		end; y = y + 1.0
 	end
 
 	if not status.inner then
-		if lobby_button(status, box_2:old(8.0, 12.0 + 36.0 * y, 256.0, 32.0), "Clock In") then
+		if lobby_button(status, box_2:old(LAYOUT_POINT.x, LAYOUT_POINT.y + 36.0 * y, 256.0, 32.0), "Clock In") then
 			inner:new(status)
+			change_layout(self, LOBBY_LAYOUT.MAIN)
 		end; y = y + 1.0
 	end
 
-	if lobby_button(status, box_2:old(8.0, 12.0 + 36.0 * y, 256.0, 32.0), "Configuration") then
+	if lobby_button(status, box_2:old(LAYOUT_POINT.x, LAYOUT_POINT.y + 36.0 * y, 256.0, 32.0), "Configuration") then
 		change_layout(self, LOBBY_LAYOUT.CONFIGURATION)
 	end; y = y + 1.0
 
 	if status.inner then
-		if lobby_button(status, box_2:old(8.0, 12.0 + 36.0 * y, 256.0, 32.0), "Clock Out") then
+		if lobby_button(status, box_2:old(LAYOUT_POINT.x, LAYOUT_POINT.y + 36.0 * y, 256.0, 32.0), "Clock Out") then
 			status.inner = nil
 			status.outer = nil
+			change_layout(self, LOBBY_LAYOUT.MAIN)
 		end; y = y + 1.0
 	end
 
-	if lobby_button(status, box_2:old(8.0, 12.0 + 36.0 * y, 256.0, 32.0), "Exit") then
+	if lobby_button(status, box_2:old(LAYOUT_POINT.x, LAYOUT_POINT.y + 36.0 * y, 256.0, 32.0), "Exit") then
 		change_layout(self, LOBBY_LAYOUT.EXIT)
 	end; y = y + 1.0
 end
@@ -464,7 +505,8 @@ end
 ---@param self   lobby # The lobby.
 ---@param status status # The status.
 local function layout_mission(self, status)
-	header_return(self, status, LOBBY_LAYOUT.MAIN)
+	header_label(self, "Mission")
+	header_input(self, status, LOBBY_LAYOUT.MAIN)
 
 	local y = 1.0
 
@@ -474,7 +516,8 @@ local function layout_mission(self, status)
 	for i, j in ipairs(status.inner.hunter) do table.insert(table_hunter, j.name) end
 	for i, j in ipairs(status.inner.weapon) do table.insert(table_weapon, j.name) end
 
-	self.hunter_select = lobby_switch(status, box_2:old(8.0, 12.0 + 36.0 * y, 288.0, 32.0), "Select Hunter",
+	self.hunter_select = lobby_switch(status, box_2:old(LAYOUT_POINT.x, LAYOUT_POINT.y + 36.0 * y, 288.0, 32.0),
+		"Select Hunter",
 		self.hunter_select, table_hunter); y = y + 1.0
 
 	local click_a = false
@@ -482,18 +525,20 @@ local function layout_mission(self, status)
 
 	--[[ weapon selection. ]]
 
-	self.weapon_select[1], click_a = lobby_switch(status, box_2:old(8.0, 12.0 + 36.0 * y, 288.0, 32.0),
+	self.weapon_select[1], click_a = lobby_switch(status,
+		box_2:old(LAYOUT_POINT.x, LAYOUT_POINT.y + 36.0 * y, 288.0, 32.0),
 		"Select Weapon A",
 		self.weapon_select[1], table_weapon); y = y + 1.0
 
-	self.weapon_select[2], click_b = lobby_switch(status, box_2:old(8.0, 12.0 + 36.0 * y, 288.0, 32.0),
+	self.weapon_select[2], click_b = lobby_switch(status,
+		box_2:old(LAYOUT_POINT.x, LAYOUT_POINT.y + 36.0 * y, 288.0, 32.0),
 		"Select Weapon B",
 		self.weapon_select[2], table_weapon); y = y + 1.0
 
 	-- solve an equipment collision, if any.
 	equip_collision(self.weapon_select, status.inner.weapon, click_a, click_b)
 
-	if lobby_button(status, box_2:old(8.0, 12.0 + 36.0 * y, 192.0, 32.0), "GO!") then
+	if lobby_button(status, box_2:old(LAYOUT_POINT.x, LAYOUT_POINT.y + 36.0 * y, 192.0, 32.0), "GO!") then
 		outer:new(status, "level/test.glb.json")
 	end; y = y + 1.0
 end
@@ -502,7 +547,8 @@ end
 ---@param self   lobby # The lobby.
 ---@param status status # The status.
 local function layout_hunter(self, status)
-	header_return(self, status, LOBBY_LAYOUT.MAIN)
+	header_label(self, "Hunter            Cust.")
+	header_input(self, status, LOBBY_LAYOUT.MAIN)
 
 	local y = 1.0
 
@@ -510,11 +556,12 @@ local function layout_hunter(self, status)
 
 	for i, j in ipairs(status.inner.hunter) do table.insert(table_hunter, j.name) end
 
-	if lobby_button(status, box_2:old(8.0, 12.0 + 36.0 * y, 288.0, 32.0), "Purchase Hunter") then
+	if lobby_button(status, box_2:old(LAYOUT_POINT.x, LAYOUT_POINT.y + 36.0 * y, 288.0, 32.0), "Purchase Hunter") then
 		table.insert(status.inner.hunter, hunter:new())
 	end; y = y + 1.0
 
-	self.hunter_select = lobby_switch(status, box_2:old(8.0, 12.0 + 36.0 * y, 288.0, 32.0), "Select Hunter",
+	self.hunter_select = lobby_switch(status, box_2:old(LAYOUT_POINT.x, LAYOUT_POINT.y + 36.0 * y, 288.0, 32.0),
+		"Select Hunter",
 		self.hunter_select, table_hunter); y = y + 1.0
 
 	local _, screen = quiver.window.get_render_shape()
@@ -524,33 +571,33 @@ local function layout_hunter(self, status)
 	local hunter = status.inner.hunter[self.hunter_select]
 
 	self.scroll, self.scroll_last = lobby_scroll(status,
-		box_2:old(8.0, 12.0 + 36.0 * y, 512.0 + 160.0, screen - (12.0 + 36.0 * y) - 64.0),
+		box_2:old(LAYOUT_POINT.x, LAYOUT_POINT.y + 36.0 * y, 512.0 + 160.0, screen - (12.0 + 36.0 * y) - 64.0),
 		self.scroll,
 		self.scroll_last, function()
-			if lobby_button(status, box_2:old(8.0, 12.0 + 36.0 * y, 288.0, 32.0), "Randomize Name") then
+			if lobby_button(status, box_2:old(LAYOUT_POINT.x, LAYOUT_POINT.y + 36.0 * y, 288.0, 32.0), "Randomize Name") then
 				hunter:randomize_name()
 			end; y = y + 1.0
 
-			self.window:text(vector_2:old(8.0, 12.0 + 36.0 * y),
+			self.window:text(vector_2:old(LAYOUT_POINT.x, LAYOUT_POINT.y + 36.0 * y),
 				"Health: " .. hunter.health .. " (" .. hunter.health_maximum .. ")", font, 24.0, 1.0, color:white()); y =
 				y + 1.0
 
-			self.window:text(vector_2:old(8.0, 12.0 + 36.0 * y),
+			self.window:text(vector_2:old(LAYOUT_POINT.x, LAYOUT_POINT.y + 36.0 * y),
 				"Walk Rate: " .. hunter.walk_rate, font, 24.0, 1.0, color:white()); y =
 				y + 1.0
 
-			self.window:text(vector_2:old(8.0, 12.0 + 36.0 * y),
+			self.window:text(vector_2:old(LAYOUT_POINT.x, LAYOUT_POINT.y + 36.0 * y),
 				"Drop Rate: " .. hunter.drop_rate, font, 24.0, 1.0, color:white()); y =
 				y + 1.0
 
-			self.window:text(vector_2:old(8.0, 12.0 + 36.0 * y),
+			self.window:text(vector_2:old(LAYOUT_POINT.x, LAYOUT_POINT.y + 36.0 * y),
 				"Fire Rate: " .. hunter.fire_rate, font, 24.0, 1.0, color:white()); y =
 				y + 1.0
 		end)
 end
 
 local function upgrade_weapon(status, point, field, price, label, font)
-	if lobby_button(status, box_2:old(8.0, 12.0 + 36.0 * point, 144.0, 32.0), "Upgrade|" .. label) then
+	if lobby_button(status, box_2:old(LAYOUT_POINT.x, LAYOUT_POINT.y + 36.0 * point, 144.0, 32.0), "Upgrade|" .. label) then
 		if status.inner.credit >= price then
 			field = field + 1.0
 			status.inner.credit = math.max(0.0, status.inner.credit - price)
@@ -568,7 +615,8 @@ end
 ---@param self   lobby # The lobby.
 ---@param status status # The status.
 local function layout_weapon(self, status)
-	header_return(self, status, LOBBY_LAYOUT.MAIN)
+	header_label(self, "Weapon            Cust.")
+	header_input(self, status, LOBBY_LAYOUT.MAIN)
 
 	local y = 1.0
 
@@ -576,11 +624,12 @@ local function layout_weapon(self, status)
 
 	for i, j in ipairs(status.inner.weapon) do table.insert(table_weapon, j.name) end
 
-	if lobby_button(status, box_2:old(8.0, 12.0 + 36.0 * y, 288.0, 32.0), "Purchase Weapon") then
+	if lobby_button(status, box_2:old(LAYOUT_POINT.x, LAYOUT_POINT.y + 36.0 * y, 288.0, 32.0), "Purchase Weapon") then
 		table.insert(status.inner.weapon, weapon:new())
 	end; y = y + 1.0
 
-	self.weapon_select[1] = lobby_switch(status, box_2:old(8.0, 12.0 + 36.0 * y, 288.0, 32.0), "Select Weapon",
+	self.weapon_select[1] = lobby_switch(status, box_2:old(LAYOUT_POINT.x, LAYOUT_POINT.y + 36.0 * y, 288.0, 32.0),
+		"Select Weapon",
 		self.weapon_select[1], table_weapon); y = y + 1.0
 
 	-- solve an equipment collision, if any.
@@ -597,10 +646,10 @@ local function layout_weapon(self, status)
 		color:white())
 
 	self.scroll, self.scroll_last = lobby_scroll(status,
-		box_2:old(8.0, 12.0 + 36.0 * y, 512.0 + 160.0, screen - (12.0 + 36.0 * y) - 64.0),
+		box_2:old(LAYOUT_POINT.x, LAYOUT_POINT.y + 36.0 * y, 512.0 + 160.0, screen - (12.0 + 36.0 * y) - 64.0),
 		self.scroll,
 		self.scroll_last, function()
-			if lobby_button(status, box_2:old(8.0, 12.0 + 36.0 * y, 288.0, 32.0), "Randomize Name") then
+			if lobby_button(status, box_2:old(LAYOUT_POINT.x, LAYOUT_POINT.y + 36.0 * y, 288.0, 32.0), "Randomize Name") then
 				weapon:randomize_name()
 			end; y = y + 1.0
 
@@ -619,34 +668,33 @@ end
 ---@param self   lobby # The lobby.
 ---@param status status # The status.
 local function layout_configuration(self, status)
-	header_return(self, status, LOBBY_LAYOUT.MAIN)
+	header_label(self, "Configuration")
+	header_input(self, status, LOBBY_LAYOUT.MAIN)
 
 	local y = 0.0
 
-	if lobby_button(status, box_2:old(8.0 + 146.0 * 1.0, 12.0 + 36.0 * y, 142.0, 32.0), "Default") then
+	if lobby_button(status, box_2:old(LAYOUT_POINT.x + 146.0 * 1.0, LAYOUT_POINT.y + 36.0 * y, 142.0, 32.0), "Default") then
 		self.user = user:default(status)
 	end; y = y + 1.0
 
 	local _, screen = quiver.window.get_render_shape()
 
-	local font = self.system:get_font("video/font_side.ttf")
-
 	self.scroll, self.scroll_last = lobby_scroll(status,
-		box_2:old(8.0, 12.0 + 36.0 * y, 512.0 + 160.0, screen - (12.0 + 36.0 * y) - 64.0),
+		box_2:old(LAYOUT_POINT.x, LAYOUT_POINT.y + 36.0 * y, 512.0 + 160.0, screen - (LAYOUT_POINT.y + 36.0 * y) - 64.0),
 		self.scroll,
 		self.scroll_last, function()
 			local click = false
 
-			self.window:text(vector_2:old(16.0, 12.0 + 36.0 * y), "Video", font, 24.0, 1.0, color:white()); y = y + 0.75
-
-			self.user.video_full, click = lobby_toggle(status, box_2:old(8.0, 12.0 + 36.0 * y, 32.0, 32.0), "Full-Screen",
+			self.user.video_full, click = lobby_toggle(status,
+				box_2:old(LAYOUT_POINT.x, LAYOUT_POINT.y + 36.0 * y, 32.0, 32.0), "Full-Screen",
 				self.user.video_full); y = y + 1.0
 
 			if click then
 				self.user:apply(status)
 			end
 
-			self.user.video_frame, click = lobby_slider(status, box_2:old(8.0, 12.0 + 36.0 * y, 288.0, 32.0),
+			self.user.video_frame, click = lobby_slider(status,
+				box_2:old(LAYOUT_POINT.x, LAYOUT_POINT.y + 36.0 * y, 288.0, 32.0),
 				"Frame Rate",
 				self.user.video_frame, 30.0, 300.0, 1.0); y = y + 1.0
 
@@ -654,66 +702,80 @@ local function layout_configuration(self, status)
 				self.user:apply(status)
 			end
 
-			self.user.video_shake = lobby_slider(status, box_2:old(8.0, 12.0 + 36.0 * y, 288.0, 32.0), "View Shake",
+			self.user.video_shake = lobby_slider(status,
+				box_2:old(LAYOUT_POINT.x, LAYOUT_POINT.y + 36.0 * y, 288.0, 32.0), "View Shake",
 				self.user.video_shake, 0.0, 4.0, 0.1); y = y + 1.0
 
-			self.user.video_light = lobby_slider(status, box_2:old(8.0, 12.0 + 36.0 * y, 288.0, 32.0), "Brightness",
+			self.user.video_light = lobby_slider(status,
+				box_2:old(LAYOUT_POINT.x, LAYOUT_POINT.y + 36.0 * y, 288.0, 32.0), "Brightness",
 				self.user.video_light, 0.0, 4.0, 0.1); y = y + 1.0
 
-			self.user.video_gamma = lobby_slider(status, box_2:old(8.0, 12.0 + 36.0 * y, 288.0, 32.0), "Gamma",
+			self.user.video_gamma = lobby_slider(status,
+				box_2:old(LAYOUT_POINT.x, LAYOUT_POINT.y + 36.0 * y, 288.0, 32.0), "Gamma",
 				self.user.video_gamma, 1.0, 4.0, 0.1); y = y + 1.0
 
-			self.user.video_glyph = lobby_switch(status, box_2:old(8.0, 12.0 + 36.0 * y, 288.0, 32.0), "Glyph Type",
+			self.user.video_glyph = lobby_switch(status,
+				box_2:old(LAYOUT_POINT.x, LAYOUT_POINT.y + 36.0 * y, 288.0, 32.0), "Glyph Type",
 				self.user.video_glyph, VIDEO_GLYPH); y = y + 1.0
 
-			self.window:text(vector_2:old(16.0, 12.0 + 36.0 * y), "Audio", font, 24.0, 1.0, color:white()); y = y + 0.75
-
-			self.user.audio_sound = lobby_slider(status, box_2:old(8.0, 12.0 + 36.0 * y, 288.0, 32.0), "Sound Volume",
+			self.user.audio_sound = lobby_slider(status,
+				box_2:old(LAYOUT_POINT.x, LAYOUT_POINT.y + 36.0 * y, 288.0, 32.0), "Sound Volume",
 				self.user.audio_sound, 0.0, 1.0, 0.05); y = y + 1.0
 
-			self.user.audio_music = lobby_slider(status, box_2:old(8.0, 12.0 + 36.0 * y, 288.0, 32.0), "Music Volume",
+			self.user.audio_music = lobby_slider(status,
+				box_2:old(LAYOUT_POINT.x, LAYOUT_POINT.y + 36.0 * y, 288.0, 32.0), "Music Volume",
 				self.user.audio_music, 0.0, 1.0, 0.05); y = y + 1.0
 
-			self.window:text(vector_2:old(16.0, 12.0 + 36.0 * y), "Input", font, 24.0, 1.0, color:white()); y = y + 0.75
-
-			self.user.input_pad_look = lobby_slider(status, box_2:old(8.0, 12.0 + 36.0 * y, 288.0, 32.0),
+			self.user.input_pad_look = lobby_slider(status,
+				box_2:old(LAYOUT_POINT.x, LAYOUT_POINT.y + 36.0 * y, 288.0, 32.0),
 				"Pad Stick Behavior",
 				self.user.input_pad_look, 1.0, 4.0, 0.1); y = y + 1.0
 
-			self.user.input_pad_look = lobby_slider(status, box_2:old(8.0, 12.0 + 36.0 * y, 288.0, 32.0),
+			self.user.input_pad_look = lobby_slider(status,
+				box_2:old(LAYOUT_POINT.x, LAYOUT_POINT.y + 36.0 * y, 288.0, 32.0),
 				"Pad Stick Dead Zone (X)",
 				self.user.input_pad_look, 1.0, 4.0, 0.1); y = y + 1.0
 
-			self.user.input_pad_look = lobby_slider(status, box_2:old(8.0, 12.0 + 36.0 * y, 288.0, 32.0),
+			self.user.input_pad_look = lobby_slider(status,
+				box_2:old(LAYOUT_POINT.x, LAYOUT_POINT.y + 36.0 * y, 288.0, 32.0),
 				"Pad Stick Dead Zone (Y)",
 				self.user.input_pad_look, 1.0, 4.0, 0.1); y = y + 1.0
 
-			self.user.input_pad_look = lobby_slider(status, box_2:old(8.0, 12.0 + 36.0 * y, 288.0, 32.0),
+			self.user.input_pad_look = lobby_slider(status,
+				box_2:old(LAYOUT_POINT.x, LAYOUT_POINT.y + 36.0 * y, 288.0, 32.0),
 				"Pad Look Range",
 				self.user.input_pad_look, 1.0, 4.0, 0.1); y = y + 1.0
 
-			self.user.input_pad_assist = lobby_slider(status, box_2:old(8.0, 12.0 + 36.0 * y, 288.0, 32.0), "Pad Assist",
+			self.user.input_pad_assist = lobby_slider(status,
+				box_2:old(LAYOUT_POINT.x, LAYOUT_POINT.y + 36.0 * y, 288.0, 32.0), "Pad Assist",
 				self.user.input_pad_assist, 1.0, 4.0, 0.1); y = y + 1.0
 
-			self.user.input_pad_rumble = lobby_slider(status, box_2:old(8.0, 12.0 + 36.0 * y, 288.0, 32.0), "Pad Rumble",
+			self.user.input_pad_rumble = lobby_slider(status,
+				box_2:old(LAYOUT_POINT.x, LAYOUT_POINT.y + 36.0 * y, 288.0, 32.0), "Pad Rumble",
 				self.user.input_pad_rumble, 1.0, 4.0, 0.1); y = y + 1.0
 
-			lobby_action(status, box_2:old(8.0, 12.0 + 36.0 * y, 288.0, 32.0), "Move X+", self.user.input_move_x_a, 3.0)
+			lobby_action(status, box_2:old(LAYOUT_POINT.x, LAYOUT_POINT.y + 36.0 * y, 288.0, 32.0), "Move X+",
+				self.user.input_move_x_a, 3.0)
 			y = y + 1.0
 
-			lobby_action(status, box_2:old(8.0, 12.0 + 36.0 * y, 288.0, 32.0), "Move X-", self.user.input_move_x_b, 3.0)
+			lobby_action(status, box_2:old(LAYOUT_POINT.x, LAYOUT_POINT.y + 36.0 * y, 288.0, 32.0), "Move X-",
+				self.user.input_move_x_b, 3.0)
 			y = y + 1.0
 
-			lobby_action(status, box_2:old(8.0, 12.0 + 36.0 * y, 288.0, 32.0), "Move Y-", self.user.input_move_y_a, 3.0)
+			lobby_action(status, box_2:old(LAYOUT_POINT.x, LAYOUT_POINT.y + 36.0 * y, 288.0, 32.0), "Move Y-",
+				self.user.input_move_y_a, 3.0)
 			y = y + 1.0
 
-			lobby_action(status, box_2:old(8.0, 12.0 + 36.0 * y, 288.0, 32.0), "Move Y+", self.user.input_move_y_b, 3.0)
+			lobby_action(status, box_2:old(LAYOUT_POINT.x, LAYOUT_POINT.y + 36.0 * y, 288.0, 32.0), "Move Y+",
+				self.user.input_move_y_b, 3.0)
 			y = y + 1.0
 
-			lobby_action(status, box_2:old(8.0, 12.0 + 36.0 * y, 288.0, 32.0), "Weapon A", self.user.input_weapon_a, 3.0)
+			lobby_action(status, box_2:old(LAYOUT_POINT.x, LAYOUT_POINT.y + 36.0 * y, 288.0, 32.0), "Weapon A",
+				self.user.input_weapon_a, 3.0)
 			y = y + 1.0
 
-			lobby_action(status, box_2:old(8.0, 12.0 + 36.0 * y, 288.0, 32.0), "Weapon B", self.user.input_weapon_b, 3.0)
+			lobby_action(status, box_2:old(LAYOUT_POINT.x, LAYOUT_POINT.y + 36.0 * y, 288.0, 32.0), "Weapon B",
+				self.user.input_weapon_b, 3.0)
 			y = y + 1.0
 		end)
 end
@@ -722,9 +784,10 @@ end
 ---@param self   lobby # The lobby.
 ---@param status status # The status.
 local function layout_exit(self, status)
-	header_return(self, status, LOBBY_LAYOUT.MAIN)
+	header_label(self, "Exit")
+	header_input(self, status, LOBBY_LAYOUT.MAIN)
 
-	if lobby_button(status, box_2:old(8.0, 12.0 + 36.0 * 1.0, 142.0, 32.0), "Accept") then
+	if lobby_button(status, box_2:old(LAYOUT_POINT.x, LAYOUT_POINT.y + 36.0 * 1.0, 142.0, 32.0), "Accept") then
 		status.active = false
 	end
 end
@@ -739,37 +802,39 @@ function lobby:draw(status)
 
 	--[[]]
 
-	-- draw 3D view.
-	quiver.draw_3d.begin(function()
-		local point = LAYOUT_CAMERA_DATA[self.layout].point
-		local focus = LAYOUT_CAMERA_DATA[self.layout].focus
+	self.render:begin(function()
+		quiver.draw.clear(color:white())
 
-		--self.ease_point:copy(self.ease_point + (point - self.camera_3d.point) * delta * 1.0)
-		--self.ease_focus:copy(self.ease_focus + (focus - self.camera_3d.focus) * delta * 1.0)
+		-- draw 3D view.
+		quiver.draw_3d.begin(function()
+			local point = LAYOUT_CAMERA_DATA[self.layout].point
+			local focus = LAYOUT_CAMERA_DATA[self.layout].focus
 
-		-- update the camera.
-		self.camera_3d.point:copy(self.ease_point)
-		self.camera_3d.focus:copy(self.ease_focus)
-		self.camera_3d.zoom = 45.0
+			self.ease_point:copy(self.ease_point + (point - self.camera_3d.point) * delta * 8.0)
+			self.ease_focus:copy(self.ease_focus + (focus - self.camera_3d.focus) * delta * 8.0)
 
-		local model = self.system:get_model("video/menu.glb")
-		model:draw(vector_3:zero(), 1.0, color:white())
-	end, self.camera_3d)
+			-- update the camera.
+			self.camera_3d.point:copy(self.ease_point)
+			self.camera_3d.focus:copy(self.ease_focus)
+			self.camera_3d.zoom = 45.0
+
+			local model = self.system:get_model("video/menu.glb")
+			model:draw(vector_3:zero(), 1.0, color:white())
+		end, self.camera_3d)
+	end)
 
 	--[[]]
+
+	self.shader:begin(function()
+		local x, y = quiver.window.get_shape()
+
+		self.render:draw_pro(box_2:old(0.0, 0.0, self.render.shape_x, -self.render.shape_y),
+			box_2:old(0.0, 0.0, x, y), vector_2:zero(), 0.0, color:white())
+	end)
 
 	-- draw 2D view.
 	quiver.draw_2d.begin(function()
 		self.window:begin()
-
-		-- draw a gradient.
-		local x, y = quiver.window.get_shape()
-		quiver.draw_2d.draw_box_2_gradient(box_2:old(0.0, 0.0, x * 0.5, y),
-			color:old(0.0, 0.0, 0.0, 160.0),
-			color:old(0.0, 0.0, 0.0, 160.0),
-			color:old(0.0, 0.0, 0.0, 0.0),
-			color:old(0.0, 0.0, 0.0, 0.0)
-		)
 
 		-- select a layout to draw.
 		if self.layout == LOBBY_LAYOUT.MAIN then

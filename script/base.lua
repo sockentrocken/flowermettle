@@ -473,6 +473,7 @@ end
 function table.remove_object(value, object)
     for k, v in ipairs(value) do
         if v == object then
+            print("remove_object = " .. k)
             table.remove(value, k)
             return
         end
@@ -647,6 +648,20 @@ function math.direction_from_euler(angle)
     d_z.z = math.sin(angle.x) * -1.0
 
     return d_x, d_y, d_z
+end
+
+-- ================================================================
+-- Math animation library.
+-- ================================================================
+
+ease = {}
+
+function ease.out_sine(value)
+    return math.sin((value * math.pi) * 0.5)
+end
+
+function ease.out_quad(value)
+    return 1.0 - (1.0 - value) * (1.0 - value)
 end
 
 -- ================================================================
@@ -1523,6 +1538,14 @@ function camera_3d:old(point, focus, angle, zoom, kind)
     return i
 end
 
+function camera_3d:pack(p_x, p_y, p_z, f_x, f_y, f_z, a_x, a_y, a_z, zoom, kind)
+    self.point:set(p_x, p_y, p_z)
+    self.focus:set(f_x, f_y, f_z)
+    self.angle:set(a_x, a_y, a_z)
+    self.zoom = zoom
+    self.kind = kind
+end
+
 camera_3d_pool = table_pool:new(camera_3d, POOL_CAMERA_3D_AMOUNT)
 
 -- ================================================================
@@ -1680,6 +1703,7 @@ function file_system:new(search)
         model = {},
         sound = {},
         music = {},
+        shader = {},
         font = {}
     }
     i.memory_data = {
@@ -1687,6 +1711,7 @@ function file_system:new(search)
         model = {},
         sound = {},
         music = {},
+        shader = {},
         font = {}
     }
 
@@ -1802,6 +1827,36 @@ end
 ---@return model asset # The asset.
 function file_system:set_model(faux_path)
     return file_system_set_asset(self, self.memory_data.model, self.memory_list.model, quiver.model.new, false, faux_path)
+end
+
+---Get a sound asset from the file-system sound resource table.
+---@param  faux_path string # The "faux" path to the asset, not taking into consideration the search path in which it was found.
+---@return sound asset # The asset.
+function file_system:get_sound(faux_path)
+    return self.memory_data.sound[faux_path]
+end
+
+---Set a sound asset into the file-system sound resource table.
+---@param  faux_path string # The "faux" path to the asset, not taking into consideration the search path in which it was found.
+---@return sound asset # The asset.
+function file_system:set_sound(faux_path)
+    return file_system_set_asset(self, self.memory_data.sound, self.memory_list.sound, quiver.sound.new, false, faux_path)
+end
+
+---Get a model asset from the file-system model resource table.
+---@param  faux_path string # The "faux" path to the asset, not taking into consideration the search path in which it was found.
+---@return shader asset # The asset.
+function file_system:get_shader(faux_path)
+    return self.memory_data.shader[faux_path]
+end
+
+---Set a shader asset into the file-system model resource table.
+---@param  faux_path string # The "faux" path to the asset, not taking into consideration the search path in which it was found.
+---@return shader asset # The asset.
+function file_system:set_shader(faux_path, ...)
+    return file_system_set_asset(self, self.memory_data.shader, self.memory_list.shader, quiver.shader.new, false,
+        faux_path,
+        ...)
 end
 
 ---Get a model asset from the file-system model resource table.
@@ -2807,7 +2862,7 @@ function window:button(shape, label, flag, call_back, call_data)
 
     if window_check_draw(self, shape) then
         if call_back then
-            call_back(call_data, self, shape, hover, index, focus, label)
+            call_back(call_data, self, shape, hover, index, focus, click, label)
         else
             -- draw a border.
             window_border(self, shape, hover, index, focus, label)
@@ -3200,9 +3255,7 @@ function window:scroll(shape, value, last, call, call_back, call_data)
 
     local begin = self.count
 
-    --quiver.draw.begin_scissor(call, shape)
-
-    call()
+    quiver.draw.begin_scissor(call, shape)
 
     local close = self.count
 
