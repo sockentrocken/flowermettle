@@ -13,37 +13,12 @@
 -- OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 -- PERFORMANCE OF THIS SOFTWARE.
 
----@class enemy : entity
-enemy = entity:new()
-
----Create a new enemy.
----@param status status # The game status.
----@return enemy value # The enemy.
-function enemy:new(status, previous)
-	local i = entity:new(status, previous)
-	setmetatable(i, self)
-	getmetatable(i).__index = self
-
-	--[[]]
-
-	i.__type = "enemy"
-	i.health = 100.0
-
-	if status then
-		i:attach_collider(status, vector_3:old(0.5, 1.0, 0.5))
-	end
-
-	return i
-end
-
-function enemy:hurt(status, source, damage)
-	self.health = self.health - damage
-
-	if self.health < 0.0 then
-		self:kill(status, damage)
-	end
-end
-
-function enemy:kill(status, damage)
-	status.outer:entity_detach(status, self)
-end
+require "script/base/constant"
+require "script/base/extension"
+require "script/base/allocator"
+require "script/base/primitive"
+require "script/base/action"
+require "script/base/window"
+require "script/base/logger"
+require "script/base/file_system"
+require "script/base/path_finder"

@@ -14,14 +14,42 @@
 -- PERFORMANCE OF THIS SOFTWARE.
 
 local WEAPON_NAME = {
-	"The Executioner",
-	"The Bastard",
-	"The Killer",
-	"The Eviscerator",
-	"The Naughty",
-	"The Evil",
-	"The Gone",
-	"The Irredeemable"
+	The = {
+		" Executioner",
+		" Bastard",
+		" Killer",
+		" Eviscerator",
+		" Naughty",
+		" Evil",
+		" Gone",
+		" Irredeemable",
+		" Rat Bastard"
+	},
+	A = {
+		[" Violet"] = {
+			" Pain",
+			" Fluid"
+		}
+	},
+	An = {
+		[" Incredible"] = {
+			" Pain",
+			" Hurt"
+		}
+	},
+	Psycho = {
+		" Freak",
+		" Bastard"
+	},
+	Hole = {
+		" Maker",
+		" Puncher"
+	},
+	Dust = {
+		" Sucker",
+		" Licker",
+		" Puncher"
+	}
 }
 
 ---@class weapon
@@ -45,7 +73,7 @@ function weapon:new(status)
 	--[[]]
 
 	i.__type       = "weapon"
-	i.name         = WEAPON_NAME[math.random(1, #WEAPON_NAME)]
+	i.name         = i:randomize_name()
 	i.ammo         = 25.0
 	i.ammo_maximum = 25.0
 	i.miss_rate    = 1.00
@@ -53,17 +81,30 @@ function weapon:new(status)
 	i.rate         = 0.00
 	i.miss         = 0.00
 
+	status.system:set_model("video/weapon_bullet.glb")
+	status.system:set_model("video/weapon_shell.glb")
+
 	return i
 end
 
-function weapon:randomize_name(status)
-	local name = WEAPON_NAME[math.random(1, #WEAPON_NAME)]
+function weapon:randomize_name(value)
+	if not value then value = WEAPON_NAME end
 
-	while self.name == name do
-		name = WEAPON_NAME[math.random(1, #WEAPON_NAME)]
+	local pick = math.random(1, table.hash_length(value))
+
+	local i = 1.0
+
+	for key, value in pairs(value) do
+		if i == pick then
+			if type(value) == "string" then
+				return value
+			else
+				return key .. self:randomize_name(value)
+			end
+		end
+
+		i = i + 1.0
 	end
-
-	self.name = name
 end
 
 ---Draw the weapon.
@@ -76,20 +117,53 @@ end
 ---Draw the weapon.
 ---@param status status # The game status.
 function weapon:draw_3d(status, side)
-	do end
+	local aim = status.outer.player:aim(status)
+
+	local cross = vector_3:old(0.0, 1.0, 0.0):cross(aim) * 0.75
+
+	if side > 0.0 then cross = cross * -1.0 end
+
+	cross = cross - aim * self.rate * 4.0
+
+	local aim = (math.atan2(aim.z, aim.x) * 180.0) / 3.14
+
+	local model = status.system:get_model("video/weapon_bullet.glb")
+	model:draw_transform(status.outer.player.point + cross, vector_3:old(0.0, aim + 90.0, 0.0),
+		vector_3:one(), color:red())
 end
 
 ---Draw the weapon.
 ---@param status status # The game status.
 function weapon:draw_2d(status, side)
-	local point = vector_2:old(8.0, 8.0 + 44.0 * side)
-	local font  = status.lobby.system:get_font("video/font_side.ttf")
-	local text  = side == 0.0 and "Weapon A: " or "Weapon B: "
+	local x, y  = quiver.window.get_render_shape()
 
-	quiver.draw_2d.draw_box_2_border(box_2:old(point.x, point.y, 512.0, 36.0))
-	font:draw(text .. self.name .. " : " .. self.ammo, point + vector_2:old(8.0, 4.0), LOGGER_FONT_SCALE,
+	local shape = vector_2:old(256.0, 64.0)
+	local point = vector_2:old(8.0 + (x - shape.x - 16.0) * side, y - shape.y - 8.0)
+
+	local box_a = box_2:old(point.x, point.y, shape.x, shape.y)
+	local box_b = box_2:old(box_a.x + 4.0, box_a.y + box_a.height * 0.5, box_a.width - 8.0, (box_a.height - 8.0) * 0.5)
+	local box_c = box_2:old(box_b.x + 4.0, box_b.y + 4.0, box_b.width - 8.0, (box_b.height - 8.0))
+
+	quiver.draw_2d.draw_box_2_round(box_a, 0.25, 4.0, color:grey() * 0.5)
+	quiver.draw_2d.draw_box_2_round(box_b, 0.25, 4.0, color:grey() * 1.0)
+	quiver.draw_2d.draw_box_2_round(box_c, 0.25, 4.0, color:white())
+
+	local font = status.system:get_font("video/font_side.ttf")
+	font:draw(self.name, point + vector_2:old(8.0, 4.0), LOGGER_FONT_SCALE,
 		LOGGER_FONT_SPACE,
 		color:white())
+	font:draw(self.ammo, vector_2:old(box_b.x + 8.0, box_b.y + 4.0), LOGGER_FONT_SCALE,
+		LOGGER_FONT_SPACE,
+		color:black())
+end
+
+function weapon:draw_lobby(status, side)
+	local model = status.system:get_model(side == 0.0 and "video/weapon_bullet.glb" or "video/weapon_shell.glb")
+
+	local point = side == 0.0 and vector_3:old(-0.50, 1.25, 0.00) or vector_3:old(0.50, 1.25, 0.00)
+	local angle = side == 0.0 and vector_3:old(-45.0, 0.00, 90.0) or vector_3:old(135.0, 180.00, 90.0)
+
+	model:draw_transform(point, angle, vector_3:one(), color:white())
 end
 
 function weapon:use(status, side)
@@ -100,8 +174,10 @@ function weapon:use(status, side)
 			aim = math.direction_from_euler(status.outer.player.angle)
 		else
 			local x, y = quiver.input.mouse.get_point()
-			local ray = quiver.draw_3d.get_screen_to_world(status.outer.camera_3d, vector_2:old(x, y),
-				vector_2:old(quiver.window.get_shape()))
+			local ray = ray:old(vector_3:zero(), vector_3:zero())
+
+			ray:pack(quiver.draw_3d.get_screen_to_world(status.outer.camera_3d, vector_2:old(x, y),
+				vector_2:old(quiver.window.get_shape())))
 
 			local collider, time = status.outer.rapier:cast_ray(ray, 4096.0, true, status.outer.level_rigid)
 

@@ -35,11 +35,11 @@ function inner:new(status)
 	i.__type = "inner"
 	i.credit = 250.0
 	i.hunter = {
-		hunter:new()
+		hunter:new(status)
 	}
 	i.weapon = {
-		weapon:new(),
-		weapon:new(),
+		weapon:new(status),
+		weapon:new(status),
 	}
 
 	collectgarbage("collect")

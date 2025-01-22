@@ -1,2 +1,2 @@
 # flowermettle
-The source code to Flowermettle.
+The source code to FLOWERMETTLE.

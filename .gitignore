@@ -6,3 +6,6 @@ user.json
 
 # LSP data.
 script/_meta.lua
+
+# Roadmap.
+plan

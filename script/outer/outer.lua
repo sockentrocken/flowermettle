@@ -15,8 +15,10 @@
 
 require "script/outer/entity"
 require "script/outer/player"
-require "script/outer/projectile"
 require "script/outer/enemy"
+require "script/outer/projectile"
+require "script/outer/zombie"
+require "script/outer/node"
 
 local TIME_STEP = 1.0 / 60.0
 
@@ -63,42 +65,41 @@ function outer:new(status, level)
 	level = quiver.file.get(i.system:find(level))
 	level = quiver.general.deserialize(level)
 
-	i.level = i.system:set_model(level.base)
+	i.level = level.file
 
-	i.level_rigid = i.rapier:rigid_body(0.0)
-
-	for x = 0, i.level.mesh_count - 1.0 do
-		i.rapier:collider_builder_convex_hull(i.level:mesh_vertex(x), i.level_rigid)
-	end
+	i:load_level()
 
 	for _, entity in ipairs(level.data) do
 		local table_class = _G[entity.__type]
-		local table_spawn = table_class.new
-		if table_class and table_spawn then
-			table.restore_meta(entity)
-			table_spawn(table_class, status, entity)
+		if table_class then
+			if table_class.new then
+				table.restore_meta(entity)
+				table_class.new(table_class, status, entity)
+			else
+				error("outer::new(): Entity \"" .. entity.__type .. "\" has no \"new\" constructor.")
+			end
+		else
+			error("outer::new(): Entity \"" .. entity.__type .. "\" has no table-class.")
 		end
 	end
-
-	for x = 0, 4 do
-		enemy:new(status, {
-			point = vector_3:new(16.0 + x * 4.0, 0.0, -4.0)
-		})
-		enemy:new(status, {
-			point = vector_3:new(16.0 + x * 4.0, 0.0, 0.0)
-		})
-		enemy:new(status, {
-			point = vector_3:new(16.0 + x * 4.0, 0.0, 4.0)
-		})
-	end
-
-	enemy:new(status, {
-		point = vector_3:new(32.0, 1.0, 0.0)
-	})
 
 	collectgarbage("collect")
 
 	return i
+end
+
+function outer:load_level()
+	if self.level_rigid then
+		self.rapier:rigid_body_remove(self.level_rigid, true)
+	end
+
+	self.level_rigid = self.rapier:rigid_body(0.0)
+
+	local level = self.system:set_model(self.level, true)
+
+	for x = 0, level.mesh_count - 1.0 do
+		self.rapier:collider_builder_convex_hull(level:mesh_vertex(x), self.level_rigid)
+	end
 end
 
 ---Attach an entity.
@@ -120,8 +121,6 @@ end
 function outer:entity_detach(status, detach)
 	if detach then
 		detach:detach_collider(status)
-
-		print("detach.which = " .. detach.which)
 
 		table.remove_object(self.entity, detach)
 	end
@@ -218,7 +217,7 @@ function outer:draw(status)
 
 	--[[]]
 
-	status.lobby.render:begin(function()
+	status.render:begin(function()
 		quiver.draw.clear(color:white())
 
 		quiver.draw_3d.begin(function()
@@ -242,17 +241,18 @@ function outer:draw(status)
 				end
 			end
 
-			self.level:draw(vector_3:zero(), 1.0, color:white())
+			local level = self.system:get_model(self.level)
+			level:draw(vector_3:zero(), 1.0, color:old(127.0, 127.0, 127.0, 255.0))
 
 			self.rapier:debug_render()
 		end, self.camera_3d)
 	end)
 
 	-- only trigger vignette in first-person?
-	status.lobby.shader:begin(function()
+	status.shader:begin(function()
 		local x, y = quiver.window.get_shape()
 
-		status.lobby.render:draw_pro(box_2:old(0.0, 0.0, status.lobby.render.shape_x, -status.lobby.render.shape_y),
+		status.render:draw_pro(box_2:old(0.0, 0.0, status.render.shape_x, -status.render.shape_y),
 			box_2:old(0.0, 0.0, x, y), vector_2:zero(), 0.0, color:white())
 	end)
 

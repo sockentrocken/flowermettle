@@ -25,7 +25,7 @@ local CAMERA_FOLLOW_SPEED = 8.0
 player                    = entity:new()
 
 ---Create a new player.
----@param status    status # The game status.
+---@param status status # The game status.
 ---@return player value # The player.
 function player:new(status, previous)
 	local i = entity:new(status, previous)
@@ -35,17 +35,22 @@ function player:new(status, previous)
 	i.__type                = "player"
 	i.camera_point          = vector_3:new(0.0, 0.0, 0.0)
 	i.camera_shake          = 0.0
-	i.hunter                = status.lobby.hunter_select
-	i.weapon                = status.lobby.weapon_select
+	i.hunter                = status.lobby.select_hunter
+	i.weapon                = status.lobby.select_weapon
+
+	-- attach collider, create character controller.
 	i:attach_collider(status, vector_3:old(0.5, 1.0, 0.5))
+	i.character         = status.outer.rapier:character_controller()
+	i.floor             = false
 
-	i.character = status.outer.rapier:character_controller()
-	i.floor     = false
-
-	status.outer.system:set_texture("video/cross.png")
+	-- associate us as the main player.
 	status.outer.player = i
 
+	-- load model.
 	status.outer.system:set_model("video/character.glb")
+
+	-- load texture.
+	status.outer.system:set_texture("video/cross.png")
 
 	return i
 end
@@ -75,22 +80,7 @@ local function player_movement(self, step, wish_where, wish_speed)
 	end
 end
 
-function player:aim(status)
-	local where = nil
-	local shape = vector_2:old(quiver.window.get_shape()) * 0.5
 
-	if status.lobby.window.device == INPUT_DEVICE.PAD then
-		local axis_x = quiver.input.pad.get_axis_state(0.0, 2.0)
-		local axis_y = quiver.input.pad.get_axis_state(0.0, 3.0)
-		where = vector_2:old(axis_x, axis_y) * 256.0
-	else
-		local mouse = vector_2:old(quiver.input.mouse.get_point())
-		local shape = vector_2:old(quiver.window.get_shape()) * 0.5
-		where = (mouse - shape)
-	end
-
-	return vector_3:old(where.x, 0.0, where.y):normalize(), where:magnitude()
-end
 
 function player:tick(status, step)
 	status.inner.weapon[self.weapon[1]]:tick(status, step, 0.0)
@@ -136,15 +126,75 @@ function player:tick(status, step)
 	self.floor = floor
 end
 
+function player:aim(status)
+	local where = nil
+	local shape = vector_2:old(quiver.window.get_shape()) * 0.5
+
+	if status.lobby.window.device == INPUT_DEVICE.PAD then
+		local axis_x = quiver.input.pad.get_axis_state(0.0, 2.0)
+		local axis_y = quiver.input.pad.get_axis_state(0.0, 3.0)
+		where = vector_2:old(axis_x, axis_y) * 256.0
+	else
+		local mouse = vector_2:old(quiver.input.mouse.get_point())
+		local shape = vector_2:old(quiver.window.get_shape()) * 0.5
+		where = (mouse - shape)
+	end
+
+	return vector_3:old(where.x, 0.0, where.y):normalize(), where:magnitude()
+end
+
+function player:aim_ray(status)
+	-- get mouse point, construct ray.
+	local x, y = quiver.input.mouse.get_point()
+	local ray = ray:zero()
+
+	-- get the view ray, from the point of the mouse.
+	ray:pack(
+		quiver.draw_3d.get_screen_to_world(
+			status.outer.camera_3d,
+			vector_2:old(x, y),
+			vector_2:old(quiver.window.get_render_shape())
+		)
+	)
+
+	-- cast ray, ignoring the level geometry.
+	local collider, time = status.outer.rapier:cast_ray(ray, 4096.0, true, status.outer.level_rigid)
+
+	-- if collider is not nil...
+	if collider then
+		-- get the point of the collider.
+		local point = vector_3:old(status.outer.rapier:get_collider_translation(collider))
+
+		-- aim at center mass.
+		local point_min = (point - self.point):normalize()
+
+		-- check for center mass first.
+		local collider_test, time = status.outer.rapier:cast_ray(ray:old(self.point, point_min), 4096.0, true,
+			status.outer.level_rigid)
+
+		if collider_test then
+			return point_min
+		end
+
+		-- aim at center mass, but add upper-half.
+		local point_min = (point - self.point):normalize()
+
+		-- check for center mass first.
+		local collider_test, time = status.outer.rapier:cast_ray(ray:old(self.point, point_min), 4096.0, true,
+			status.outer.level_rigid)
+
+		if collider_test then
+			return point_min
+		end
+	end
+end
+
 function player:draw_3d(status)
 	local hunter         = status.inner.hunter[self.hunter]
 	local weapon_a       = status.inner.weapon[self.weapon[1]]
 	local weapon_b       = status.inner.weapon[self.weapon[2]]
-
 	local average        = (weapon_a.miss + weapon_b.miss) * 0.5 * 0.25
-
 	local aim, magnitude = self:aim(status)
-
 	local delta          = quiver.general.get_frame_time()
 	local shake          = vector_3:old(
 		math.random_sign(self.camera_shake + average * 0.1) * status.lobby.user.video_shake,
@@ -152,60 +202,16 @@ function player:draw_3d(status)
 		math.random_sign(self.camera_shake + average * 0.1) * status.lobby.user.video_shake
 	)
 
-	if quiver.input.board.get_press(INPUT_BOARD.TAB) then
-		status.outer.camera_3d.point:copy(self.point)
-		status.outer.camera_3d.focus:copy(self.point + vector_3:old(1.0, 0.0, 0.0))
-		quiver.input.mouse.set_active(false)
-	end
-
-	if quiver.input.board.get_release(INPUT_BOARD.TAB) then
-		quiver.input.mouse.set_active(true)
-		quiver.input.mouse.set_hidden(true)
-	end
-
-	if quiver.input.board.get_down(INPUT_BOARD.TAB) then
-		local x, y = quiver.input.mouse.get_delta()
-
-		self.angle.x = self.angle.x - x * 0.1
-		self.angle.y = self.angle.y + y * 0.1
-
-		local d_x = math.direction_from_euler(self.angle)
-
-		status.outer.camera_3d.point:copy(self.point + shake)
-		status.outer.camera_3d.focus:copy(self.point + shake + d_x)
-	else
-		-- update the camera.
-		local camera_point = self.point + CAMERA_FOLLOW_POINT + (aim * magnitude * 0.01)
-		self.camera_point:copy(self.camera_point +
-			(camera_point - status.outer.camera_3d.point) * delta * CAMERA_FOLLOW_SPEED)
-		status.outer.camera_3d.point:copy(self.camera_point + shake + CAMERA_FOLLOW_POINT)
-		status.outer.camera_3d.focus:copy(self.camera_point + shake)
-	end
+	-- update the camera.
+	local camera_point   = self.point + CAMERA_FOLLOW_POINT + (aim * magnitude * 0.01)
+	self.camera_point:copy(self.camera_point +
+		(camera_point - status.outer.camera_3d.point) * delta * CAMERA_FOLLOW_SPEED)
+	status.outer.camera_3d.point:copy(self.camera_point + shake + CAMERA_FOLLOW_POINT)
+	status.outer.camera_3d.focus:copy(self.camera_point + shake)
 
 	self.camera_shake = math.max(0.0, self.camera_shake - delta * self.camera_shake * 8.0)
 
 	status.outer.camera_2d.shift:copy(shake * 16.0)
-
-	local x, y = quiver.input.mouse.get_point()
-	local ray = quiver.draw_3d.get_screen_to_world(status.outer.camera_3d, vector_2:old(x, y),
-		vector_2:old(quiver.window.get_render_shape()))
-
-	local collider, time = status.outer.rapier:cast_ray(ray, 4096.0, true, status.outer.level_rigid)
-
-	local c = color:red()
-
-	if collider then
-		local c_point = vector_3:old(status.outer.rapier:get_collider_translation(collider))
-		aim = (c_point - self.point):normalize()
-		c = c:blue()
-
-		quiver.draw_3d.draw_cube(
-			vector_3:old(ray.position.x, ray.position.y, ray.position.z) +
-			vector_3:old(ray.direction.x, ray.direction.y, ray.direction.z) * time,
-			vector_3:one() * 0.5, color:green())
-	end
-
-	quiver.draw_3d.draw_line(self.point, self.point + aim * 4.0, c)
 
 	-- draw hunter, weapon.
 	hunter:draw_3d(status)
@@ -220,16 +226,7 @@ function player:draw_2d(status)
 
 	local average  = (weapon_a.miss + weapon_b.miss) * 0.5 * 0.25
 
-	if status.lobby.window.device == INPUT_DEVICE.PAD then
-		for x = 0, quiver.input.pad.get_axis_count(0.0) do
-			LOGGER_FONT:draw("axis " .. x .. " : " .. quiver.input.pad.get_axis_state(0.0, x),
-				vector_2:old(8.0, 8.0 + LOGGER_FONT_SCALE * x),
-				LOGGER_FONT_SCALE, LOGGER_FONT_SPACE,
-				color:red())
-		end
-	end
-
-	local where = nil
+	local where    = nil
 
 	if status.lobby.window.device == INPUT_DEVICE.PAD then
 		local axis_x = quiver.input.pad.get_axis_state(0.0, 2.0)
@@ -250,7 +247,7 @@ function player:draw_2d(status)
 	end
 
 	cross:draw(where - (vector_2:old(cross.shape_x, cross.shape_y) * 0.75 * (average + 1.0) * 0.5), 0.0, 0.75 + average,
-		color:red())
+		color:white())
 
 	-- draw hunter, weapon.
 	hunter:draw_2d(status)

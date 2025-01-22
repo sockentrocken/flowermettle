@@ -13,11 +13,7 @@
 -- OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 -- PERFORMANCE OF THIS SOFTWARE.
 
-require "script/base"
 require "script/status"
-require "script/lobby/lobby"
-require "script/inner/inner"
-require "script/outer/outer"
 
 --[[----------------------------------------------------------------]]
 
@@ -27,7 +23,7 @@ function quiver.main()
 
     -- while window should remain open and status is active...
     while not quiver.window.get_close() and status.active do
-        -- re-load quiver.
+        -- if the re-load key was set off, re-load quiver.
         if quiver.input.board.get_press(INPUT_BOARD.F1) then
             break
         end

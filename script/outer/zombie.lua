@@ -13,37 +13,29 @@
 -- OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 -- PERFORMANCE OF THIS SOFTWARE.
 
----@class enemy : entity
-enemy = entity:new()
+---@class zombie : enemy
+zombie = enemy:new()
 
----Create a new enemy.
+---Create a new zombie.
 ---@param status status # The game status.
----@return enemy value # The enemy.
-function enemy:new(status, previous)
-	local i = entity:new(status, previous)
+---@return zombie value # The zombie.
+function zombie:new(status, previous)
+	local i = enemy:new(status, previous)
 	setmetatable(i, self)
 	getmetatable(i).__index = self
 
 	--[[]]
 
-	i.__type = "enemy"
-	i.health = 100.0
+	i.__type = "zombie"
 
 	if status then
-		i:attach_collider(status, vector_3:old(0.5, 1.0, 0.5))
+		status.outer.system:set_model("video/character.glb")
 	end
 
 	return i
 end
 
-function enemy:hurt(status, source, damage)
-	self.health = self.health - damage
-
-	if self.health < 0.0 then
-		self:kill(status, damage)
-	end
-end
-
-function enemy:kill(status, damage)
-	status.outer:entity_detach(status, self)
+function zombie:draw_3d(status)
+	local model = status.outer.system:get_model("video/character.glb")
+	model:draw(self.point - vector_3:old(0.0, 1.0, 0.0), 0.5, color:red())
 end
