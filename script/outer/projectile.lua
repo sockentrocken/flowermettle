@@ -35,20 +35,40 @@ end
 function projectile:tick(status, step)
 	self.point:copy(self.point + (self.speed * step))
 
-	local test = status.outer.rapier:test_intersect_cuboid(self.point, vector_3:one() * 0.5)
-	if test then
-		local user = status.outer.rapier:get_collider_user_data(test)
+	local collider = status.outer.rapier:test_intersect_cuboid(self.point, vector_3:one() * 0.5)
 
+	-- if collider is not nil...
+	if collider then
+		-- get user-data from collider.
+		local user = status.outer.rapier:get_collider_user_data(collider)
+
+		-- if collider is not the same as the ignore collider...
 		if not (user == self.parent.index) then
-			local other = status.outer:entity_find_index(status, user)
+			-- find an entity with the same index as the user-data.
+			local entity = status.outer:entity_find_index(status, user)
 
-			if other then
-				if other.hurt then
-					other:hurt(status, self, 25.0)
+			-- if entity is not nil...
+			if entity then
+				-- if entity has a hurt method...
+				if entity.hurt then
+					-- hurt entity.
+					entity:hurt(status, self, 25.0)
+				end
+			else
+				-- cast ray.
+				local collider, x, y, z = status.outer.rapier:cast_ray_normal(ray:old(self.point, self.speed), 2048.0,
+					true)
+
+				-- if collider is not nil...
+				if collider then
+					-- spawn smoke particle.
+					particle:new(status, nil, self.point, vector_3:old(x, y, z), 1.0, vector_3:old(4.0, 0.0, 1.0),
+						"concrete")
 				end
 			end
 
-			status.outer:entity_detach(status, self)
+			-- detach us from the entity list.
+			self:detach(status)
 		end
 	end
 end

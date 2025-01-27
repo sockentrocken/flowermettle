@@ -46,11 +46,10 @@ local ENTITY_LIST = {
     }
 }
 
-
-local one_tenth = vector_3:new(0.1, 0.1, 0.1)
-local color_x = color:new(255.0, 0.0, 0.0, 255.0)
-local color_y = color:new(0.0, 255.0, 0.0, 255.0)
-local color_z = color:new(0.0, 0.0, 255.0, 255.0)
+local ONE_TENTH = vector_3:new(0.1, 0.1, 0.1)
+local COLOR_X = color:new(255.0, 0.0, 0.0, 255.0)
+local COLOR_Y = color:new(0.0, 255.0, 0.0, 255.0)
+local COLOR_Z = color:new(0.0, 0.0, 255.0, 255.0)
 
 ---@class editor
 ---@field snap       number
@@ -194,7 +193,7 @@ function editor:entity_paint(index, entity, box)
                             box.min.y * (1.0 - y) + box.max.y * y,
                             box.min.z * (1.0 - z) + box.max.z * z)
 
-                    quiver.draw_3d.draw_cube(point, one_tenth, entity_color)
+                    quiver.draw_3d.draw_cube(point, ONE_TENTH, entity_color)
 
                     quiver.draw_3d.draw_line(point,
                         point + vector_3:old(-1.0 * (1.0 - x) + 1.0 * x, 0.0, 0.0),
@@ -216,13 +215,13 @@ function editor:entity_paint(index, entity, box)
         y = entity.point + y * 2.0
         z = entity.point + z * 2.0
 
-        quiver.draw_3d.draw_cube(x, one_tenth, color_x)
-        quiver.draw_3d.draw_cube(y, one_tenth, color_y)
-        quiver.draw_3d.draw_cube(z, one_tenth, color_z)
+        quiver.draw_3d.draw_cube(x, ONE_TENTH, COLOR_X)
+        quiver.draw_3d.draw_cube(y, ONE_TENTH, COLOR_Y)
+        quiver.draw_3d.draw_cube(z, ONE_TENTH, COLOR_Z)
 
-        quiver.draw_3d.draw_line(entity.point, x, color_x)
-        quiver.draw_3d.draw_line(entity.point, y, color_y)
-        quiver.draw_3d.draw_line(entity.point, z, color_z)
+        quiver.draw_3d.draw_line(entity.point, x, COLOR_X)
+        quiver.draw_3d.draw_line(entity.point, y, COLOR_Y)
+        quiver.draw_3d.draw_line(entity.point, z, COLOR_Z)
     end
 
     quiver.draw_3d.draw_box_3(box, entity_color)

@@ -18,7 +18,7 @@ local LOGGER_LINE_COLOR_MESSAGE = color:new(255.0, 255.0, 255.0, 255.0)
 local LOGGER_LINE_COLOR_FAILURE = color:new(255.0, 0.0, 0.0, 255.0)
 local LOGGER_LINE_COUNT         = 4.0
 local LOGGER_LINE_DELAY         = 4.0
-local LOGGER_LINE_LABEL_TIME    = false
+local LOGGER_LINE_LABEL_TIME    = true
 
 ---@class logger_line
 logger_line                     = {

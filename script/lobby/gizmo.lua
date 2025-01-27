@@ -13,6 +13,8 @@
 -- OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 -- PERFORMANCE OF THIS SOFTWARE.
 
+-- TO-DO add local
+
 ---@class gizmo
 ---@field hover 	  number
 ---@field sound_hover boolean
@@ -37,17 +39,21 @@ function gizmo:new()
 	return i
 end
 
----Calculate a shape with animation.
+---Calculate the point of a gizmo with animation.
 ---@param lobby lobby # The lobby.
 ---@param shape box_2 # The shape.
+---@return box_2 shape # The shape, with animation.
 function gizmo:move(lobby, shape)
 	-- move shape horizontally.
-	shape.x = shape.x + (math.out_quad(self.hover) * 8.0) - 16.0 +
-		math.out_quad(math.min(1.0, lobby.time * 4.0)) * 16.0
+	shape.x = shape.x + (math.out_quad(self.hover) * 8.0) - 16.0 + math.out_quad(math.min(1.0, lobby.time * 4.0)) * 16.0
 
 	return shape
 end
 
+---Calculate the color of a gizmo with animation.
+---@param lobby lobby # The lobby.
+---@param color color # The color.
+---@return color color # The color, with animation.
 function gizmo:fade(lobby, color)
 	-- fade in/out from hover.
 	color = color * (math.out_quad(self.hover) * 0.25 + 0.75)

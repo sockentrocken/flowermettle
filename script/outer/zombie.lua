@@ -28,14 +28,13 @@ function zombie:new(status, previous)
 
 	i.__type = "zombie"
 
-	if status then
-		status.outer.system:set_model("video/character.glb")
-	end
+	-- load model.
+	status.system:set_model("video/character.glb")
 
 	return i
 end
 
 function zombie:draw_3d(status)
-	local model = status.outer.system:get_model("video/character.glb")
+	local model = status.system:get_model("video/character.glb")
 	model:draw(self.point - vector_3:old(0.0, 1.0, 0.0), 0.5, color:red())
 end

@@ -40,13 +40,14 @@ function status:new()
     i.__type = "status"
     i.active = true
     i.logger = logger:new()
-    i.render = quiver.render_texture.new(vector_2:old(quiver.window.get_shape()))
+    i.render = quiver.render_texture.new(vector_2:old(quiver.window.get_shape()) * 0.5)
     -- TO-DO use VFS.
-    i.shader = quiver.shader.new("asset/video/shader/base.vs", "asset/video/shader/vignette.fs")
+    i.shader = quiver.shader.new("asset/video/shader/base.vs", "asset/video/shader/base.fs")
     i.system = file_system:new({
         "asset"
     })
-    i.lobby  = lobby:new(i)
+    i.light = light_manager:new("asset/video/shader/light.vs", "asset/video/shader/light.fs")
+    i.lobby = lobby:new(i)
 
     return i
 end
@@ -62,7 +63,7 @@ function status:draw()
 
     -- re-load render-texture with the window.
     if quiver.window.get_resize() then
-        self.render = quiver.render_texture.new(vector_2:old(quiver.window.get_shape()))
+        self.render = quiver.render_texture.new(vector_2:old(quiver.window.get_shape()) * 0.5)
     end
 
     -- if lobby is active, draw lobby. otherwise, draw in-game state.

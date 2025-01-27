@@ -13,20 +13,20 @@
 -- OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 -- PERFORMANCE OF THIS SOFTWARE.
 
----@class node : entity
-node = entity:new()
+---@class door : entity
+door = entity:new()
 
----Create a new node.
+---Create a new door.
 ---@param status status # The game status.
----@return node value # The node.
-function node:new(status, previous)
+---@return door value # The door.
+function door:new(status, previous)
 	local i = entity:new(status, previous)
 	setmetatable(i, self)
 	getmetatable(i).__index = self
 
 	--[[]]
 
-	i.__type = "node"
+	i.__type = "door"
 
 	return i
 end

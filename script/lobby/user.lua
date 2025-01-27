@@ -17,6 +17,7 @@ local USER_FILE = "user.json"
 
 ---@class user
 ---@field video_full       boolean
+---@field video_reel       boolean
 ---@field video_frame      number
 ---@field video_shake      number
 ---@field video_light      number
@@ -79,6 +80,7 @@ function user:default(status)
 
     --[[ video. ]]
     i.video_full  = true
+    i.video_reel  = true
     i.video_frame = 60.0
     i.video_shake = 1.0
     i.video_light = 0.0

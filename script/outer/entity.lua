@@ -38,37 +38,78 @@ function entity:new(status, previous)
 	i.angle     = previous and previous.angle or vector_3:new(0.0, 0.0, 0.0)
 	i.speed     = previous and previous.speed or vector_3:new(0.0, 0.0, 0.0)
 	i.shape     = previous and previous.shape or vector_3:new(0.0, 0.0, 0.0)
-	i.old_point = previous and previous.old_point or vector_3:new(0.0, 0.0, 0.0)
-	i.old_angle = previous and previous.old_angle or vector_3:new(0.0, 0.0, 0.0)
 
-	-- attach entity to outer state.
+	-- interpolation data.
+	i.point_old = previous and previous.point_old or vector_3:new(0.0, 0.0, 0.0)
+	i.angle_old = previous and previous.angle_old or vector_3:new(0.0, 0.0, 0.0)
+
+	-- if status is not nil...
 	if status then
-		status.outer:entity_attach(status, i)
+		-- attach us to the entity list.
+		i:attach(status)
 	end
 
 	return i
 end
 
+---Set the point of the current entity, also setting the point of the collider, if there is any.
+---@param status status   # The game status.
+---@param point  vector_3 # The point of the entity.
 function entity:set_point(status, point)
-	self.point:copy(point)
-	self.old_point:copy(point)
+	-- copy the given point to both the "new"/"current" point, and also the "old"/"interpolation" point.
+	self.point:copy(point); self.point_old:copy(point)
 
+	-- if collider is not nil...
 	if self.collider then
+		-- copy the given point to the collider.
 		status.outer.rapier:set_collider_translation(self.collider, self.point)
 	end
 end
 
+---Attach a collider to the current entity.
+---@param status status   # The game status.
+---@param shape  vector_3 # The half-shape of the collider.
 function entity:attach_collider(status, shape)
+	-- create a new cuboid collider, set its translation and user-data.
 	self.collider = status.outer.rapier:collider_builder_cuboid(shape)
 	status.outer.rapier:set_collider_translation(self.collider, self.point)
 	status.outer.rapier:set_collider_user_data(self.collider, self.index)
 end
 
+---Detach a collider from the current entity.
+---@param status status # The game status.
 function entity:detach_collider(status)
+	-- if collider is not nil...
 	if self.collider then
+		-- detach collider.
 		status.outer.rapier:collider_remove(self.collider, true)
 	end
 end
+
+---Attach the current entity.
+---@param status status # The game status.
+function entity:attach(status)
+	-- add index to entity.
+	self.which = #status.outer.entity + 1.0
+	self.index = status.outer.entity_index
+
+	-- add entity to table.
+	table.insert(status.outer.entity, self)
+
+	-- increase index.
+	status.outer.entity_index = status.outer.entity_index + 1.0
+end
+
+---Detach the current entity.
+---@param status status # The game status.
+function entity:detach(status)
+	self:detach_collider(status)
+
+	-- TO-DO: use table.remove instead.
+	table.remove_object(status.outer.entity, self)
+end
+
+--[[----------------------------------------------------------------]]
 
 ---@class entity_pointer
 ---@field number

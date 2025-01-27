@@ -13,37 +13,30 @@
 -- OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 -- PERFORMANCE OF THIS SOFTWARE.
 
----@class enemy : entity
-enemy = entity:new()
+---@class enemy : actor
+enemy = actor:new()
 
 ---Create a new enemy.
 ---@param status status # The game status.
 ---@return enemy value # The enemy.
 function enemy:new(status, previous)
-	local i = entity:new(status, previous)
+	local i = actor:new(status, previous)
 	setmetatable(i, self)
 	getmetatable(i).__index = self
 
 	--[[]]
 
 	i.__type = "enemy"
-	i.health = 100.0
-
-	if status then
-		i:attach_collider(status, vector_3:old(0.5, 1.0, 0.5))
-	end
 
 	return i
 end
 
-function enemy:hurt(status, source, damage)
-	self.health = self.health - damage
-
-	if self.health < 0.0 then
-		self:kill(status, damage)
-	end
+function enemy:frame(status)
+	status.outer.player.enemy_count = status.outer.player.enemy_count + 1.0
 end
 
-function enemy:kill(status, damage)
-	status.outer:entity_detach(status, self)
+function enemy:kill(status, source, damage)
+	actor.kill(self, status, source, damage)
+
+	status.outer.player.enemy_count = status.outer.player.enemy_count - 1.0
 end

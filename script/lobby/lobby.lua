@@ -82,7 +82,7 @@ local LOBBY_LAYOUT_CAMERA = {
 ---@field ease_focus 	vector_3
 ---@field select_hunter number
 ---@field select_weapon table
----@field data 	table
+---@field data 			table
 ---@field time 			number
 ---@field scroll_value 	number
 ---@field scroll_frame 	number
@@ -103,7 +103,7 @@ function lobby:new(status)
 	i.active        = true
 	i.editor        = editor:new(status)
 	i.window        = window:new()
-	i.user          = user:new(i)
+	i.user          = user:new(status)
 	i.camera_3d     = camera_3d:new(vector_3:new(8.0, 2.5, 0.0), vector_3:new(0.0, 2.0, 0.0), vector_3:new(0.0, 1.0, 0.0),
 		45.0, CAMERA_3D_KIND.PERSPECTIVE)
 	i.camera_2d     = camera_2d:new(vector_2:new(0.0, 0.0), vector_2:new(0.0, 0.0), 0.0, 1.0)
@@ -113,18 +113,18 @@ function lobby:new(status)
 	i.ease_focus    = vector_3:new(-4.0, 1.0, 0.0)
 	i.select_hunter = 1.0
 	i.select_weapon = { 1.0, 2.0 }
-	i.reel          = false
+	i.reel          = true
 	i.data          = {}
 	i.time          = 0.0
 	i.scroll_value  = 0.0
 	i.scroll_frame  = 0.0
 
 	-- load model.
-	status.system:set_model("video/menu.glb")
+	status.system:set_model("video/menu.glb"):bind_shader(1.0, status.light.shader)
 
 	-- load sound.
-	status.system:set_sound("audio/_interface_hover.ogg")
-	status.system:set_sound("audio/_interface_click.ogg")
+	status.system:set_sound("audio/interface/hover.ogg")
+	status.system:set_sound("audio/interface/click.ogg")
 
 	-- load font.
 	status.system:set_font("video/font_main.ttf", false, 48.0)
@@ -141,64 +141,27 @@ function lobby:new(status)
 	return i
 end
 
-math.euler = 2.71828
+local REEL_TIME = 22.5
 
-function math.bell_curve(value)
-	return math.euler ^ -value ^ 2
-end
-
-function math.bell_curve_interpolate(value)
-	local percentage = math.value_from_percentage(-3.0, 3.0, value)
-
-	if percentage < -3.0 or percentage > 3.0 then return 0.0 end
-
-	return math.bell_curve(percentage)
-end
 
 ---Draw the lobby.
 ---@param status status # The game status.
 function lobby:draw(status)
+	local shape = vector_2:old(quiver.window.get_shape())
+	self.camera_2d.zoom = math.clamp(0.25, 4.0, math.snap(0.25, shape.y / 640.0))
+
+	if quiver.window.get_resize() then
+		quiver.input.mouse.set_scale(vector_2:old(1.0 / self.camera_2d.zoom, 1.0 / self.camera_2d.zoom))
+	end
+
 	local delta = quiver.general.get_frame_time()
 
 	-- update time in current layout.
 	self.time = self.time + delta
 
-	if self.time < 22.5 and self.reel and not ACTION_RETURN:press() then
+	if self.time < REEL_TIME and self.reel and self.user.video_reel and not ACTION_RETURN:press() then
 		-- draw 2D view.
-		quiver.draw_2d.begin(function()
-			local x, y = quiver.window.get_shape()
-			x          = x * 0.5
-			y          = y * 0.5
-
-			--[[]]
-
-			local logo_a_color = math.bell_curve_interpolate(math.percentage_from_value(0.0, 7.5, self.time))
-			local logo_b_color = math.bell_curve_interpolate(math.percentage_from_value(7.5, 15.0, self.time))
-			local logo_c_color = math.bell_curve_interpolate(math.percentage_from_value(15.0, 22.5, self.time))
-			logo_a_color       = color:old(255.0, 255.0, 255.0, math.floor(logo_a_color * 255.0))
-			logo_b_color       = color:old(255.0, 255.0, 255.0, math.floor(logo_b_color * 255.0))
-			logo_c_color       = color:old(255.0, 255.0, 255.0, math.floor(logo_c_color * 255.0))
-
-			---@type font
-			local font         = status.system:get_font("video/font_side.ttf")
-			local logo_a       = status.system:get_texture("video/logo_a.png")
-			local logo_b       = status.system:get_texture("video/logo_b.png")
-			local logo_c       = status.system:get_texture("video/logo_c.png")
-			local logo_a_point = vector_2:old(x - logo_a.shape_x * 0.5, y - logo_a.shape_y * 0.5)
-			local logo_b_point = vector_2:old(x - logo_b.shape_x * 0.5, y - logo_b.shape_y * 0.5)
-			local logo_c_point = vector_2:old(x - logo_c.shape_x, y - logo_c.shape_y)
-			local text_a_shape = font:measure_text("made by", 24.0, 1.0)
-			local text_b_shape = font:measure_text("made with", 24.0, 1.0)
-
-			font:draw("made by", vector_2:old(x - text_a_shape * 0.5, y - 64.0), 24.0, 1.0, logo_a_color)
-			logo_a:draw(logo_a_point, 0.0, 1.0, logo_a_color)
-
-			font:draw("made with", vector_2:old(x - text_b_shape * 0.5, y - 256.0), 24.0, 1.0, logo_b_color)
-			logo_b:draw(logo_b_point, 0.0, 1.0, logo_b_color)
-
-			logo_c:draw(logo_c_point, 0.0, 2.0, logo_c_color)
-		end, self.camera_2d)
-
+		quiver.draw_2d.begin(function() self:layout_reel(status) end, self.camera_2d)
 		return
 	else
 		self.reel = false
@@ -217,6 +180,12 @@ function lobby:draw(status)
 
 		-- draw 3D view.
 		quiver.draw_3d.begin(function()
+			status.light:begin(nil, self.camera_3d)
+
+			--status.light:static_light(vector_3:old(0.0, 2.0, 4.0), vector_3:zero(), color:red())
+
+			quiver.draw_3d.draw_cube(vector_3:zero(), vector_3:one(), color:red())
+
 			-- get point and focus for the current layout.
 			local point = LOBBY_LAYOUT_CAMERA[self.layout].point
 			local focus = LOBBY_LAYOUT_CAMERA[self.layout].focus
@@ -278,8 +247,35 @@ function lobby:draw(status)
 		end
 
 		-- close window.
-		self.window:close()
+		self.window:close(not self.active)
 	end, self.camera_2d)
+end
+
+---Layout: reel.
+---@param status status # The status.
+function lobby:layout_reel(status)
+	local shape        = vector_2:old(quiver.window.get_shape()) * 0.5
+
+	local logo_a_color = math.bell_curve_clamp(math.percentage_from_value((REEL_TIME / 3.0) * 0.0,
+		(REEL_TIME / 3.0) * 1.0, self.time))
+	local logo_b_color = math.bell_curve_clamp(math.percentage_from_value((REEL_TIME / 3.0) * 1.0,
+		(REEL_TIME / 3.0) * 2.0, self.time))
+	local logo_c_color = math.bell_curve_clamp(math.percentage_from_value((REEL_TIME / 3.0) * 2.0,
+		(REEL_TIME / 3.0) * 3.0, self.time))
+	logo_a_color       = color:old(255.0, 255.0, 255.0, math.floor(logo_a_color * 255.0))
+	logo_b_color       = color:old(255.0, 255.0, 255.0, math.floor(logo_b_color * 255.0))
+	logo_c_color       = color:old(255.0, 255.0, 255.0, math.floor(logo_c_color * 255.0))
+
+	local logo_a       = status.system:get_texture("video/logo_a.png")
+	local logo_b       = status.system:get_texture("video/logo_b.png")
+	local logo_c       = status.system:get_texture("video/logo_c.png")
+	local logo_a_point = vector_2:old(shape.x - logo_a.shape_x * 0.5, shape.y - logo_a.shape_y * 0.5)
+	local logo_b_point = vector_2:old(shape.x - logo_b.shape_x * 0.5, shape.y - logo_b.shape_y * 0.5)
+	local logo_c_point = vector_2:old(shape.x - logo_c.shape_x * 0.5, shape.y - logo_c.shape_y * 0.5)
+
+	--logo_a:draw(logo_a_point, 0.0, 1.0, logo_a_color)
+	--logo_b:draw(logo_b_point, 0.0, 1.0, logo_b_color)
+	logo_c:draw(logo_c_point, 0.0, 1.0, color:white())
 end
 
 ---Layout: main.
@@ -501,10 +497,10 @@ function lobby:layout_configuration(status)
 		self.user = user:default(status)
 	end; y = y + 1.0
 
-	local _, screen = quiver.window.get_render_shape()
+	local shape = vector_2:old(quiver.window.get_shape()):scale_zoom(self.camera_2d)
 
 	self.scroll_value, self.scroll_frame = self:scroll(status,
-		box_2:old(WINDOW_POINT.x, WINDOW_POINT.y + 36.0 * y, 512.0 + 160.0, screen - (WINDOW_POINT.y + 36.0 * y) - 64.0),
+		box_2:old(WINDOW_POINT.x, WINDOW_POINT.y + 36.0 * y, 512.0 + 160.0, shape.y - (WINDOW_POINT.y + 36.0 * y) - 64.0),
 		self.scroll_value,
 		self.scroll_frame, function()
 			local click = false
@@ -516,6 +512,10 @@ function lobby:layout_configuration(status)
 			if click then
 				self.user:apply(status)
 			end
+
+			self.user.video_reel = self:toggle(status,
+				box_2:old(WINDOW_POINT.x, WINDOW_POINT.y + 36.0 * y, 32.0, 32.0), "Show Intro",
+				self.user.video_reel); y = y + 1.0
 
 			self.user.video_frame, click = self:slider(status,
 				box_2:old(WINDOW_POINT.x, WINDOW_POINT.y + 36.0 * y, 288.0, 32.0),
@@ -529,14 +529,6 @@ function lobby:layout_configuration(status)
 			self.user.video_shake = self:slider(status,
 				box_2:old(WINDOW_POINT.x, WINDOW_POINT.y + 36.0 * y, 288.0, 32.0), "View Shake",
 				self.user.video_shake, 0.0, 4.0, 0.1); y = y + 1.0
-
-			self.user.video_light = self:slider(status,
-				box_2:old(WINDOW_POINT.x, WINDOW_POINT.y + 36.0 * y, 288.0, 32.0), "Brightness",
-				self.user.video_light, 0.0, 4.0, 0.1); y = y + 1.0
-
-			self.user.video_gamma = self:slider(status,
-				box_2:old(WINDOW_POINT.x, WINDOW_POINT.y + 36.0 * y, 288.0, 32.0), "Gamma",
-				self.user.video_gamma, 1.0, 4.0, 0.1); y = y + 1.0
 
 			self.user.video_glyph = self:switch(status,
 				box_2:old(WINDOW_POINT.x, WINDOW_POINT.y + 36.0 * y, 288.0, 32.0), "Glyph Type",
@@ -642,7 +634,7 @@ function lobby:get_gizmo(status, label, hover, index, focus, click)
 		if not data.sound_hover then
 			data.sound_hover = true
 			if self.time > 0.1 then
-				local sound = status.system:get_sound("audio/_interface_hover.ogg")
+				local sound = status.system:get_sound("audio/interface/hover.ogg")
 				sound:play()
 			end
 		end
@@ -651,7 +643,7 @@ function lobby:get_gizmo(status, label, hover, index, focus, click)
 	end
 
 	if click then
-		local sound = status.system:get_sound("audio/_interface_click.ogg")
+		local sound = status.system:get_sound("audio/interface/click.ogg")
 		sound:play()
 	end
 

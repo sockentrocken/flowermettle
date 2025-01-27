@@ -41,7 +41,7 @@ vector_2                    = {
 		end,
 		__div = function(a, b) return vector_2:old(a.x / b.x, a.y / b.y) end,
 		__tostring = function(a)
-			return "{ x:" .. tostring(a.x) .. " y:" .. tostring(a.y) .. " }" .. tostring(a.z) .. " }"
+			return string.format("{ x : %.2f, y: %.2f }", a.x, a.y)
 		end
 	}
 }
@@ -154,6 +154,13 @@ end
 ---@return number value # The magnitude.
 function vector_2:angle(value)
 	return -math.atan2(value.y - self.y, value.x - self.x)
+end
+
+---Scale a vector by the current 2D camera's zoom scale.
+---@param camera camera_2d # The current 2D camera.
+---@return vector_2 value # The vector.
+function vector_2:scale_zoom(camera)
+	return self * (1.0 / camera.zoom)
 end
 
 vector_2_pool = table_pool:new(vector_2, POOL_VECTOR_2_AMOUNT, "vector_2")
@@ -692,6 +699,9 @@ color = {
 					a.a * b.a
 				)
 			end
+		end,
+		__tostring = function(a)
+			return string.format("{ r : %.2f, g: %.2f, b: %.2f, a: %.2f }", a.r, a.g, a.b, a.a)
 		end
 	}
 }

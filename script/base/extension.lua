@@ -97,7 +97,6 @@ end
 function table.remove_object(value, object)
 	for k, v in ipairs(value) do
 		if v == object then
-			print("remove_object = " .. k)
 			table.remove(value, k)
 			return
 		end
@@ -157,6 +156,8 @@ function table.restore_meta(value)
 end
 
 --[[----------------------------------------------------------------]]
+
+math.euler = 2.71828
 
 ---Check the sanity of a number, which will check for NaN and Infinite.
 ---@param value number # Number to check.
@@ -278,4 +279,16 @@ end
 
 function math.out_quad(value)
 	return 1.0 - (1.0 - value) * (1.0 - value)
+end
+
+function math.bell_curve(value)
+	return math.euler ^ -value ^ 2
+end
+
+function math.bell_curve_clamp(value)
+	local percentage = math.value_from_percentage(-3.0, 3.0, value)
+
+	if percentage < -3.0 or percentage > 3.0 then return 0.0 end
+
+	return math.bell_curve(percentage)
 end
