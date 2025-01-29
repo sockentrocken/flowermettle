@@ -13,20 +13,20 @@
 -- OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 -- PERFORMANCE OF THIS SOFTWARE.
 
----@class door : entity
-door = entity:new()
+---@class level : entity
+level = entity:new()
 
----Create a new door.
+---Create a new level.
 ---@param status status # The game status.
----@return door value # The door.
-function door:new(status, previous)
+---@return level value # The level.
+function level:new(status, previous)
 	local i = entity:new(status, previous)
 	setmetatable(i, self)
 	getmetatable(i).__index = self
 
 	--[[]]
 
-	i.__type = "door"
+	i.__type = "level"
 
 	return i
 end

@@ -49,6 +49,32 @@ function status:new()
     i.light = light_manager:new("asset/video/shader/light.vs", "asset/video/shader/light.fs")
     i.lobby = lobby:new(i)
 
+    local level_list = i.system:list("level/")
+
+    i.level = {
+        initial = {},
+        regular = {},
+    }
+
+    for _, path in ipairs(level_list) do
+        local file = quiver.general.deserialize(quiver.file.get(i.system:find(path)))
+        local initial = false
+
+        for _, entity in ipairs(file.data) do
+            if entity.__type == "player" then
+                initial = true
+            end
+        end
+
+        if initial then
+            print("insert as initial.")
+            table.insert(i.level.initial, file)
+        else
+            print("insert as regular.")
+            table.insert(i.level.regular, file)
+        end
+    end
+
     return i
 end
 

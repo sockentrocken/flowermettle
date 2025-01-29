@@ -61,8 +61,8 @@ end
 function light_manager:begin(call, camera_3d)
 	local location = self.shader:get_location(11)
 	self.shader:set_shader_vector_3(location, camera_3d.point)
-	self.shader:set_shader_number(self.point_amount_location, self.point_amount)
-	self.shader:set_shader_number(self.focus_amount_location, self.focus_amount)
+	self.shader:set_shader_integer(self.point_amount_location, self.point_amount)
+	self.shader:set_shader_integer(self.focus_amount_location, self.focus_amount)
 
 	if call then
 		self.shader:begin(call, camera_3d)

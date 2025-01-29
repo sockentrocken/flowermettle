@@ -27,7 +27,7 @@ entity = {}
 ---@param status status # The game status.
 ---@return entity value # The entity.
 function entity:new(status, previous)
-	local i = {}
+	local i = previous or {}
 	setmetatable(i, self)
 	getmetatable(i).__index = self
 

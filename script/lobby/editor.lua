@@ -21,44 +21,59 @@ local WIDGET_KIND = {
 }
 local ENTITY_LIST = {
     player = {
-        box = box_3:new(
-            vector_3:new(-0.5, -1.0, -0.5),
-            vector_3:new(0.5, 1.0, 0.5)
-        )
+        data = {
+            value_1 = 1.0,
+            value_2 = 2.0,
+            value_3 = 3.0,
+            value_4 = false,
+        },
+        help = {
+            box = box_3:new(
+                vector_3:new(-0.5, -1.0, -0.5),
+                vector_3:new(0.5, 1.0, 0.5)
+            )
+        }
     },
     zombie = {
-        box = box_3:new(
-            vector_3:new(-0.5, -1.0, -0.5),
-            vector_3:new(0.5, 1.0, 0.5)
-        )
-    },
-    node = {
-        box = box_3:new(
-            vector_3:new(-0.5, -0.5, -0.5),
-            vector_3:new(0.5, 0.5, 0.5)
-        )
+        data = {
+            value_1 = 1.0,
+            value_2 = 2.0,
+            value_3 = 3.0,
+            value_4 = false,
+        },
+        help = {
+            box = box_3:new(
+                vector_3:new(-0.5, -1.0, -0.5),
+                vector_3:new(0.5, 1.0, 0.5)
+            )
+        }
     },
     door = {
-        box = box_3:new(
-            vector_3:new(-0.5, -1.0, -0.5),
-            vector_3:new(0.5, 1.0, 0.5)
-        )
+        data = {
+        },
+        help = {
+            box = box_3:new(
+                vector_3:new(-0.5, -0.5, -0.5),
+                vector_3:new(0.5, 0.5, 0.5)
+            )
+        }
     }
 }
-
 local ONE_TENTH = vector_3:new(0.1, 0.1, 0.1)
 local COLOR_X = color:new(255.0, 0.0, 0.0, 255.0)
 local COLOR_Y = color:new(0.0, 255.0, 0.0, 255.0)
 local COLOR_Z = color:new(0.0, 0.0, 255.0, 255.0)
+local MOUSE_SENSITIVITY = 0.025
 
 ---@class editor
----@field snap       number
----@field level_wire boolean
----@field level_file string | nil
----@field model_list table
----@field level_list table
----@field scroll     table
----@field widget     widget_kind
+---@field entity    table
+---@field snap      number
+---@field wire      boolean
+---@field file      string | nil
+---@field scroll    table
+---@field widget    widget_kind
+---@field camera_3d camera_3d
+---@field camera_2d camera_2d
 editor = {
     __meta = {}
 }
@@ -72,33 +87,29 @@ function editor:new(status)
 
     --[[]]
 
-    i.__type     = "editor"
+    i.__type    = "editor"
 
     -- entity list.
-    i.entity     = {}
+    i.entity    = {}
 
     -- entity snap amount.
-    i.snap       = 0.5
+    i.snap      = 0.5
 
     -- wire-frame view.
-    i.level_wire = true
-
-    -- a list of every level-model in the video/level folder and every file in the level folder.
-    i.model_list = status.system:list("video/level/")
-    i.level_list = status.system:list("level/")
+    i.wire      = true
 
     -- scroll cache for create/re-load level, respectively.
-    i.scroll     = { { 0.0, 0.0 }, { 0.0, 0.0 } }
+    i.scroll    = { { 0.0, 0.0 }, { 0.0, 0.0 } }
 
     -- currently active editor widget.
-    i.widget     = WIDGET_KIND.POINT
+    i.widget    = WIDGET_KIND.POINT
 
-    -- editor camera3D/2D view.
-    i.camera_3d  = camera_3d:new(vector_3:new(8.0, 2.5, 0.0), vector_3:new(0.0, 2.0, 0.0), vector_3:new(0.0, 1.0, 0.0),
+    -- editor 3D/2D camera view.
+    i.camera_3d = camera_3d:new(vector_3:new(8.0, 2.5, 0.0), vector_3:new(0.0, 2.0, 0.0), vector_3:new(0.0, 1.0, 0.0),
         90.0, CAMERA_3D_KIND.PERSPECTIVE)
-    i.camera_2d  = camera_2d:new(vector_2:new(0.0, 0.0), vector_2:new(0.0, 0.0), 0.0, 1.0)
+    i.camera_2d = camera_2d:new(vector_2:new(0.0, 0.0), vector_2:new(0.0, 0.0), 0.0, 1.0)
 
-    -- load the main-bar asset data.
+    -- load texture.
     status.system:set_texture("video/editor/point.png")
     status.system:set_texture("video/editor/angle.png")
     status.system:set_texture("video/editor/scale.png")
@@ -110,10 +121,418 @@ function editor:new(status)
     return i
 end
 
-function editor:entity_input(index, entity)
+function editor:draw(status)
+    -- draw 3D view.
+    quiver.draw_3d.begin(function() self:draw_3d(status) end, self.camera_3d)
+    -- draw 2D view.
+    quiver.draw_2d.begin(function() self:draw_2d(status) end, self.camera_2d)
+end
+
+function editor:draw_3d(status)
+    -- if there is a currently acitve file...
+    if self.file then
+        self:pick_entity()
+        self:move_camera()
+
+        -- adjust snap count.
+        if quiver.input.board.get_down(INPUT_BOARD.L_CONTROL) then
+            local _, wheel = quiver.input.mouse.get_wheel()
+
+            self.wheel = math.max(0.25, self.snap + wheel * 0.25)
+        end
+
+        -- for each entity in the entity list...
+        for i = #self.entity, 1, -1 do
+            -- get the entity.
+            local entity = self.entity[i]
+
+            -- run input and 3D draw logic for entity.
+            self:entity_work(entity, i)
+            self:entity_draw_3d(entity)
+        end
+
+        -- get level model.
+        local level = status.system:get_model(self.file)
+
+        -- if wire-frame mode is set...
+        if self.wire then
+            -- draw as wire-frame.
+            level:draw_wire(vector_3:zero(), 1.0, color:old(255.0, 255.0, 255.0, 255.0))
+        else
+            -- draw normally.
+            level:draw(vector_3:zero(), 1.0, color:old(255.0, 255.0, 255.0, 255.0))
+        end
+    end
+end
+
+function editor:draw_2d(status)
+    -- begin window.
+    status.lobby.window:begin()
+
+    -- if there is a current level...
+    if self.file then
+        -- for every entity in the entity list...
+        for _, entity in ipairs(self.entity) do
+            -- run draw 2D logic for entity.
+            self:draw_entity_2d(entity)
+        end
+
+        -- draw main and side panel.
+        self:layout_main_bar(status)
+        self:layout_side_bar(status)
+    else
+        self:layout_select(status)
+    end
+
+    -- if the active device is not the mouse...
+    if not (status.lobby.window.device == INPUT_DEVICE.MOUSE) then
+        -- make it exclusively be the mouse.
+        status.lobby.window:set_device(INPUT_DEVICE.MOUSE)
+    end
+
+    -- close window.
+    status.lobby.window:close(true)
+end
+
+--[[----------------------------------------------------------------]]
+
+---Pick an entity in the world using the mouse.
+function editor:pick_entity()
+    -- if the l. mouse button was set off...
+    if quiver.input.mouse.get_press(INPUT_MOUSE.LEFT) then
+        -- get the mouse's point, screen shape.
+        local mouse = vector_2:old(quiver.input.mouse.get_point())
+        local shape = vector_2:old(quiver.window.get_shape())
+
+        if quiver.collision.point_box(mouse, box_2:old(256.0 + 16.0, 64.0, shape.x, shape.y)) then
+            local hit_which = nil
+            local hit_where = math.huge
+
+            -- get a ray from the camera.
+            local hit_ray   = ray:old(vector_3:zero(), vector_3:zero())
+            hit_ray:pack(quiver.draw_3d.get_screen_to_world(self.camera_3d, mouse, shape))
+
+            for i, entity in ipairs(self.entity) do
+                local locate = ENTITY_LIST[entity.__help.locate]
+                local collision = quiver.collision.ray_box(hit_ray,
+                    locate.help.box
+                    :scale(entity.scale)
+                    :point(entity.point)
+                )
+
+                -- if ray hit entity...
+                if collision.hit then
+                    -- if the distance to the hit is bigger than the previous hit...
+                    if hit_where > collision.distance then
+                        -- store collision.
+                        hit_which = i
+                        hit_where = collision.distance
+                    end
+                end
+            end
+
+            -- if there has been a collision with the ray...
+            if hit_which then
+                -- get the entity.
+                local entity = self.entity[hit_which]
+
+                -- if the l. shift key is not held down, mark every entity as in-active.
+                if not quiver.input.board.get_down(INPUT_BOARD.L_SHIFT) then
+                    for _, entity in pairs(self.entity) do
+                        entity.__help.active = false
+                    end
+                end
+
+                -- mark hit entity as active.
+                entity.__help.active = true
+
+                -- mark as last entity pick.
+                self.last = hit_which
+            else
+                -- mark every entity as in-active.
+                for _, entity in pairs(self.entity) do
+                    entity.__help.active = false
+                end
+
+                -- remove last entity pick.
+                self.last = nil
+            end
+        end
+    end
+end
+
+---Move the camera.
+function editor:move_camera()
+    -- lock mouse.
+    if quiver.input.mouse.get_press(INPUT_MOUSE.RIGHT) then
+        quiver.input.mouse.set_active(false)
+    end
+
+    -- un-lock mouse.
+    if quiver.input.mouse.get_release(INPUT_MOUSE.RIGHT) then
+        quiver.input.mouse.set_active(true)
+    end
+
+    -- move camera on the X and Z axis.
+    if quiver.input.mouse.get_down(INPUT_MOUSE.RIGHT) then
+        local x, y = quiver.input.mouse.get_delta()
+        x = x * MOUSE_SENSITIVITY
+        y = y * MOUSE_SENSITIVITY
+
+        -- move camera.
+        self.camera_3d.point:copy(self.camera_3d.point + vector_3:old(x, 0.0, y))
+        self.camera_3d.focus:copy(self.camera_3d.focus + vector_3:old(x, 0.0, y))
+    end
+
+    -- move camera on the Y axis.
+    if quiver.input.board.get_down(INPUT_BOARD.L_SHIFT) then
+        local _, wheel = quiver.input.mouse.get_wheel()
+        local look = (self.camera_3d.focus - self.camera_3d.point):normalize()
+
+        self.camera_3d.point:copy(self.camera_3d.point + look * wheel * 4.0)
+    end
+end
+
+---Layout: select.
+---@param status status # The game status.
+function editor:layout_select(status)
+    local x, y = quiver.window.get_shape()
+    local half = (x * 0.5) - 16.0
+    local point_a = vector_2:old(16.0 + half * 0.0, 16.0)
+    local point_b = vector_2:old(24.0 + half * 1.0, 16.0)
+    local box_a = box_2:old(point_a.x, point_a.y + 32.0, half - 8.0, y - 64.0)
+    local box_b = box_2:old(point_b.x, point_b.y + 32.0, half - 8.0, y - 64.0)
+
+    quiver.draw_2d.draw_box_2_round(box_2:old(8.0, 8.0, x - 16.0, y - 16.0), 0.05, 4.0, color:grey())
+
+    --[[]]
+
+    status.lobby.window:text(point_a, "Create Map", LOGGER_FONT, LOGGER_FONT_SCALE,
+        LOGGER_FONT_SPACE, color:white())
+
+    quiver.draw_2d.draw_box_2_round(box_a, 0.25, 4.0, color:grey())
+
+    -- draw every available model to create a new level from.
+    self.scroll[1][1], self.scroll[1][2] = status.lobby:scroll(status, box_a, self.scroll[1][1], self.scroll[1][2],
+        function()
+            for i, value in ipairs(status.system:list("video/level/")) do
+                if status.lobby:button(status, box_2:old(box_a.x + 8.0, box_a.y + 8.0 + (40.0 * (i - 1.0)), 320.0, 32.0), value) then
+                    status.system:set_model(value)
+                    self.file = value
+
+                    -- update the camera.
+                    self.camera_3d.point = vector_3:new(0.0, 8.0, 4.0)
+                    self.camera_3d.focus = vector_3:new(0.0, 0.0, 0.0)
+                    self.camera_3d.zoom = 90.0
+                end
+            end
+        end)
+
+    --[[]]
+
+    status.lobby.window:text(point_b, "Reload Map", LOGGER_FONT, LOGGER_FONT_SCALE,
+        LOGGER_FONT_SPACE, color:white())
+
+    quiver.draw_2d.draw_box_2_round(box_b, 0.25, 4.0, color:grey())
+
+    self.scroll[2][1], self.scroll[2][2] = status.lobby:scroll(status, box_b, self.scroll[2][1], self.scroll[2][2],
+        function()
+            for i, value in ipairs(status.system:list("level/")) do
+                if status.lobby:button(status, box_2:old(box_b.x + 8.0, box_b.y + 8.0 + (40.0 * (i - 1.0)), 320.0, 32.0), value) then
+                    local data = quiver.file.get("asset/" .. value)
+                    local data = quiver.general.deserialize(data)
+
+                    for _, entity in ipairs(data.data) do
+                        entity.__help = {
+                            locate = entity.__type,
+                            active = false
+                        }
+                        entity.__type = nil
+                    end
+
+                    status.system:set_model(data.file)
+                    self.file = data.file
+
+                    self.entity = data.data
+
+                    table.restore_meta(self.entity)
+
+                    -- update the camera.
+                    self.camera_3d.point = vector_3:new(0.0, 8.0, 4.0)
+                    self.camera_3d.focus = vector_3:new(0.0, 0.0, 0.0)
+                    self.camera_3d.zoom = 90.0
+                end
+            end
+        end)
+end
+
+---Layout: main bar.
+---@param status status # The game status.
+function editor:layout_main_bar(status)
+    -- get screen shape.
+    local shape = vector_2:old(quiver.window.get_shape())
+
+    -- draw background.
+    quiver.draw_2d.draw_box_2_round(box_2:old(8.0, 8.0, shape.x - 16.0, 48.0), 0.25, 4.0, color:grey())
+
+    -- widget panel.
+    if status.lobby:button_toggle(status, box_2:old(16.0 + (36.0 * 0.0), 16.0, 32.0, 32.0), "video/editor/point.png", not (self.widget == WIDGET_KIND.POINT)) then
+        self.widget = WIDGET_KIND.POINT
+    end
+    if status.lobby:button_toggle(status, box_2:old(16.0 + (36.0 * 1.0), 16.0, 32.0, 32.0), "video/editor/angle.png", not (self.widget == WIDGET_KIND.ANGLE)) then
+        self.widget = WIDGET_KIND.ANGLE
+    end
+    if status.lobby:button_toggle(status, box_2:old(16.0 + (36.0 * 2.0), 16.0, 32.0, 32.0), "video/editor/scale.png", not (self.widget == WIDGET_KIND.SCALE)) then
+        self.widget = WIDGET_KIND.SCALE
+    end
+
+    -- save/load/exit/reload panel.
+    if status.lobby:button(status, box_2:old(16.0 + (36.0 * 3.0), 16.0, 32.0, 32.0), "video/editor/save.png") then
+        -- create a save table, store level file, level data.
+        local save = {}
+        save.file = self.file
+        save.data = table.copy(self.entity)
+
+        -- for every entity in the save data...
+        for _, entity in ipairs(save.data) do
+            -- tag entity type, remove editor help table.
+            entity.__type = entity.__help.locate
+            entity.__help = nil
+        end
+
+        -- get model name, without leading path and extension.
+        local file = string.sub(self.file, #"video/level/" + 1.0)
+        file = string.tokenize(file, "([^.]+)")[1]
+
+        -- serialize save file table, then save to .JSON file.
+        quiver.file.set("asset/level/" .. file .. ".json", quiver.general.serialize(save))
+    end
+    if status.lobby:button(status, box_2:old(16.0 + (36.0 * 4.0), 16.0, 32.0, 32.0), "video/editor/load.png") then
+        status.lobby.editor = editor:new(status)
+    end
+    if status.lobby:button(status, box_2:old(16.0 + (36.0 * 5.0), 16.0, 32.0, 32.0), "video/editor/exit.png") then
+        status.lobby.layout = 0.0
+        status.lobby.editor = editor:new(status)
+    end
+    if status.lobby:button(status, box_2:old(16.0 + (36.0 * 6.0), 16.0, 32.0, 32.0), "video/editor/reload.png") then
+        status.system:set_model(self.file, true)
+    end
+
+    -- wire/snap panel.
+    self.wire = status.lobby:toggle(status, box_2:old(16.0 + (36.0 * 7.0), 16.0, 32.0, 32.0), "Wire",
+        self.wire)
+    self.snap = status.lobby:slider(status, box_2:old(16.0 + (36.0 * 10.0), 16.0, 128.0, 32.0), "Snap",
+        self.snap, 0.25, 4.0, 0.25)
+end
+
+---Layout: side bar.
+---@param status status # The game status.
+function editor:layout_side_bar(status)
+    local shape = vector_2:old(quiver.window.get_shape())
+    local box = box_2:old(8.0, 64.0, 256.0, shape.y - 72.0)
+    local half = self.last and (shape.y * 0.5) - 48.0 or shape.y - 88.0
+    local point_a = vector_2:old(16.0, box.y + 8.0 * 1.0 + half * 0.0)
+    local point_b = vector_2:old(16.0, box.y + 8.0 * 2.0 + half * 1.0)
+    local box_a = box_2:old(point_a.x, point_a.y, box.width - 16.0, half)
+    local box_b = box_2:old(point_b.x, point_b.y, box.width - 16.0, half)
+
+    -- draw background.
+    quiver.draw_2d.draw_box_2_round(box, 0.05, 4.0, color:grey())
+
+    self.scroll[1][1], self.scroll[1][2] = status.lobby:scroll(status, box_a, self.scroll[1][1], self.scroll[1][2],
+        function()
+            local i = 0.0
+
+            -- for each entity in the entity reference list...
+            for name, value in pairs(ENTITY_LIST) do
+                -- draw button for the creation of a new entity.
+                if status.lobby:button(status, box_2:old(box_a.x + 4.0, box_a.y + 4.0 + (36.0 * i), box_a.width - 8.0, 32.0), name) then
+                    -- TO-DO this should really cast a ray from the camera view into the level.
+                    local point = self.camera_3d.point +
+                        (self.camera_3d.focus - self.camera_3d.point):normalize() * 8.0
+                    point = point:snap(self.snap)
+
+                    -- create entity table, store a reference to the entity reference table entry, and make active.
+                    local entity = table.copy(value.data)
+                    entity.__help = {
+                        locate = name,
+                        active = true
+                    }
+                    entity.point = vector_3:new(0.0, 0.0, 0.0)
+                    entity.angle = vector_3:new(0.0, 0.0, 0.0)
+                    entity.scale = vector_3:new(1.0, 1.0, 1.0)
+                    entity.point:copy(point)
+
+                    table.restore_meta(entity)
+
+                    table.insert(self.entity, entity)
+                end
+
+                i = i + 1.0
+            end
+        end)
+
+    if self.last then
+        self.scroll[2][1], self.scroll[2][2] = status.lobby:scroll(status, box_b, self.scroll[2][1], self.scroll[2][2],
+            function()
+                local i = 0.0
+
+                local entity = self.entity[self.last]
+
+                -- for each entity in the entity reference list...
+                for name, value in pairs(entity) do
+                    if type(value) == "number" then
+                        local box = box_2:old(box_b.x + 4.0, box_b.y + 4.0 + (36.0 * i), box_b.width * 0.5, 32.0)
+
+                        entity[name] = status.lobby:slider(status, box, name, value, 0.0, 1.0, 0.1)
+
+                        i = i + 1.0
+                    elseif type(value) == "boolean" then
+                        local box = box_2:old(box_b.x + 4.0, box_b.y + 4.0 + (36.0 * i), 32.0, 32.0)
+
+                        entity[name] = status.lobby:toggle(status, box, name, value)
+
+                        i = i + 1.0
+                    end
+                end
+            end)
+    end
+end
+
+---Calculate the keyboard and mouse movement.
+---@return vector_3 value # The movement.
+function editor:widget_movement()
+    local result = vector_3:old(0.0, 0.0, 0.0)
+    local key_w = (quiver.input.board.get_press(INPUT_BOARD.W) or quiver.input.board.get_press_repeat(INPUT_BOARD.W))
+    local key_a = (quiver.input.board.get_press(INPUT_BOARD.A) or quiver.input.board.get_press_repeat(INPUT_BOARD.A))
+    local key_s = (quiver.input.board.get_press(INPUT_BOARD.S) or quiver.input.board.get_press_repeat(INPUT_BOARD.S))
+    local key_d = (quiver.input.board.get_press(INPUT_BOARD.D) or quiver.input.board.get_press_repeat(INPUT_BOARD.D))
+
+    result.x = key_a and 1.0 * -1.0 or result.x
+    result.x = key_d and 1.0 or result.x
+
+    _, result.y = quiver.input.mouse.get_wheel()
+
+    result.z = key_w and 1.0 * -1.0 or result.z
+    result.z = key_s and 1.0 or result.z
+
+    return result
+end
+
+---Input logic for a given entity.
+---@param entity table  # The entity.
+---@param index  number # The entity index.
+function editor:entity_work(entity, index)
+    -- if entity is currently active...
     if entity.__help.active then
         -- delete every active entity.
         if quiver.input.board.get_press(INPUT_BOARD.DELETE) then
+            -- if the entity to remove is the same as the "last" entity...
+            if self.last == index then
+                -- remove last.
+                self.last = nil
+            end
+
             table.remove(self.entity, index)
         end
 
@@ -143,55 +562,63 @@ function editor:entity_input(index, entity)
                         move.z = y * 0.05
                     end
 
+                    -- if middle mouse button has been let go, snap point.
                     if quiver.input.mouse.get_release(INPUT_MOUSE.MIDDLE) then
                         entity.point:copy(entity.point:snap(self.snap))
                     end
 
+                    -- change the entity's point.
                     entity.point:copy(entity.point + move)
                 elseif self.widget == WIDGET_KIND.ANGLE then
+                    -- if middle mouse button has been set off, reset angle.
                     if quiver.input.mouse.get_press(INPUT_MOUSE.MIDDLE) then
                         entity.angle:set(0.0, 0.0, 0.0)
                     end
 
+                    -- change the entity's angle.
                     entity.angle:copy(entity.angle + (move * 10.0))
                 else
+                    -- if middle mouse button has been set off, reset scale.
                     if quiver.input.mouse.get_press(INPUT_MOUSE.MIDDLE) then
                         entity.scale:set(1.0, 1.0, 1.0)
                     end
 
+                    -- change the entity's scale.
                     entity.scale:copy(entity.scale + move)
                 end
             end
         end
     else
         if quiver.input.board.get_down(INPUT_BOARD.L_CONTROL) then
+            -- select every entity.
             if quiver.input.board.get_press(INPUT_BOARD.A) then
                 entity.__help.active = true
-            end
-        end
-
-        if quiver.input.board.get_down(INPUT_BOARD.L_ALTERNATE) then
-            if quiver.input.board.get_press(INPUT_BOARD.A) then
-                entity.__help.active = false
             end
         end
     end
 end
 
-function editor:entity_paint(index, entity, box)
+---3D draw logic for a given entity.
+---@param entity table  # The entity.
+function editor:entity_draw_3d(entity)
+    -- set entity color.
     local entity_color = color:red()
+    local locate = ENTITY_LIST[entity.__help.locate]
+    local locate_box = locate.help.box:scale(entity.scale):point(entity.point)
 
+    -- if entity is currently active...
     if entity.__help.active then
         entity_color = color:green()
 
+        -- draw point help.
         for x = 0, 1 do
             for y = 0, 1 do
                 for z = 0, 1 do
                     local point =
                         vector_3:old(
-                            box.min.x * (1.0 - x) + box.max.x * x,
-                            box.min.y * (1.0 - y) + box.max.y * y,
-                            box.min.z * (1.0 - z) + box.max.z * z)
+                            locate_box.min.x * (1.0 - x) + locate_box.max.x * x,
+                            locate_box.min.y * (1.0 - y) + locate_box.max.y * y,
+                            locate_box.min.z * (1.0 - z) + locate_box.max.z * z)
 
                     quiver.draw_3d.draw_cube(point, ONE_TENTH, entity_color)
 
@@ -210,6 +637,7 @@ function editor:entity_paint(index, entity, box)
             end
         end
 
+        -- draw angle help.
         local x, y, z = math.direction_from_euler(entity.angle)
         x = entity.point + x * 2.0
         y = entity.point + y * 2.0
@@ -224,321 +652,31 @@ function editor:entity_paint(index, entity, box)
         quiver.draw_3d.draw_line(entity.point, z, COLOR_Z)
     end
 
-    quiver.draw_3d.draw_box_3(box, entity_color)
+    -- draw bound box.
+    quiver.draw_3d.draw_box_3(locate_box, entity_color)
 end
 
-function editor:draw(lobby, status)
-    -- draw 3D view.
-    quiver.draw_3d.begin(function() self:draw_3d(lobby, status) end, self.camera_3d)
-    -- draw 2D view.
-    quiver.draw_2d.begin(function() self:draw_2d(lobby, status) end, self.camera_2d)
-end
-
-function editor:draw_3d(lobby, status)
-    if self.level_file then
-        local hit_ray = nil
-        local hit_which = nil
-        local hit_where = nil
-
-        if quiver.input.mouse.get_press(INPUT_MOUSE.LEFT) then
-            local x, y = quiver.input.mouse.get_point()
-            hit_ray    = ray:old(vector_3:zero(), vector_3:zero())
-            hit_ray:pack(quiver.draw_3d.get_screen_to_world(self.camera_3d, vector_2:old(x, y),
-                vector_2:old(quiver.window.get_shape())))
-        end
-
-        for i = #self.entity, 1, -1 do
-            local entity = self.entity[i]
-            local locate = ENTITY_LIST[entity.__help.locate]
-            local locate_box = locate.box:scale(entity.scale):point(entity.point)
-
-            if hit_ray then
-                local collision = quiver.collision.ray_box(hit_ray, locate_box)
-
-                if collision.hit then
-                    if hit_which then
-                        if hit_where > collision.distance then
-                            hit_which = i
-                            hit_where = collision.distance
-                        end
-                    else
-                        hit_which = i
-                        hit_where = collision.distance
-                    end
-                end
-            end
-
-            self:entity_input(i, entity)
-            self:entity_paint(i, entity, locate_box)
-        end
-
-        if hit_ray then
-            if hit_which then
-                local pick = self.entity[hit_which]
-
-                if not quiver.input.board.get_down(INPUT_BOARD.L_SHIFT) then
-                    for _, entity in pairs(self.entity) do
-                        entity.__help.active = false
-                    end
-                end
-
-                pick.__help.active = true
-            else
-                for _, entity in pairs(self.entity) do
-                    entity.__help.active = false
-                end
-            end
-        end
-
-        if quiver.input.mouse.get_press(INPUT_MOUSE.RIGHT) then
-            quiver.input.mouse.set_active(false)
-        end
-
-        if quiver.input.mouse.get_release(INPUT_MOUSE.RIGHT) then
-            quiver.input.mouse.set_active(true)
-        end
-
-        if quiver.input.board.get_down(INPUT_BOARD.L_CONTROL) then
-            local _, snap = quiver.input.mouse.get_wheel()
-
-            self.snap = math.max(0.25, self.snap + snap * 0.25)
-        end
-
-        if quiver.input.board.get_down(INPUT_BOARD.L_SHIFT) then
-            local _, snap = quiver.input.mouse.get_wheel()
-            local look = (self.camera_3d.focus - self.camera_3d.point):normalize()
-
-            self.camera_3d.point:copy(self.camera_3d.point + look * snap * 4.0)
-        end
-
-        if quiver.input.mouse.get_down(INPUT_MOUSE.RIGHT) then
-            local x, y = quiver.input.mouse.get_delta()
-            x = x * 0.025
-            y = y * 0.025
-
-            self.camera_3d.point:copy(self.camera_3d.point + vector_3:old(x, 0.0, y))
-            self.camera_3d.focus:copy(self.camera_3d.focus + vector_3:old(x, 0.0, y))
-        end
-
-        local level = status.system:get_model(self.level_file)
-
-        if self.level_wire then
-            level:draw_wire(vector_3:zero(), 1.0, color:old(255.0, 255.0, 255.0, 255.0))
-        else
-            level:draw(vector_3:zero(), 1.0, color:old(255.0, 255.0, 255.0, 255.0))
-        end
-    end
-end
-
-function editor:draw_2d(lobby, status)
-    -- begin window.
-    lobby.window:begin()
-
-    if not self.level_file then
-        local x, y = quiver.window.get_shape()
-        local half = (x * 0.5) - 16.0
-        local point_a = vector_2:old(16.0 + half * 0.0, 16.0)
-        local point_b = vector_2:old(24.0 + half * 1.0, 16.0)
-        local box_a = box_2:old(point_a.x, point_a.y + 32.0, half - 8.0, y - 64.0)
-        local box_b = box_2:old(point_b.x, point_b.y + 32.0, half - 8.0, y - 64.0)
-
-        quiver.draw_2d.draw_box_2_round(box_2:old(8.0, 8.0, x - 16.0, y - 16.0), 0.05, 4.0, color:grey())
-
-        lobby.window:text(point_a, "Create Map", LOGGER_FONT, LOGGER_FONT_SCALE,
-            LOGGER_FONT_SPACE, color:white())
-
-        quiver.draw_2d.draw_box_2_round(box_a, 0.25, 4.0, color:grey())
-
-        -- draw every available model to create a new level from.
-        self.scroll[1][1], self.scroll[1][2] = lobby:scroll(status, box_a, self.scroll[1][1], self.scroll[1][2],
-            function()
-                for i, value in ipairs(self.model_list) do
-                    if lobby:button(status, box_2:old(box_a.x + 8.0, box_a.y + 8.0 + (40.0 * (i - 1.0)), 320.0, 32.0), value) then
-                        status.system:set_model(value)
-                        self.level_file = value
-
-                        -- update the camera.
-                        self.camera_3d.point = vector_3:new(0.0, 8.0, 4.0)
-                        self.camera_3d.focus = vector_3:new(0.0, 0.0, 0.0)
-                        self.camera_3d.zoom = 90.0
-                    end
-                end
-            end)
-
-        lobby.window:text(point_b, "Reload Map", LOGGER_FONT, LOGGER_FONT_SCALE,
-            LOGGER_FONT_SPACE, color:white())
-
-        quiver.draw_2d.draw_box_2_round(box_b, 0.25, 4.0, color:grey())
-
-
-        self.scroll[2][1], self.scroll[2][2] = lobby:scroll(status, box_b, self.scroll[2][1], self.scroll[2][2],
-            function()
-                for i, value in ipairs(self.level_list) do
-                    if lobby:button(status, box_2:old(box_b.x + 8.0, box_b.y + 8.0 + (40.0 * (i - 1.0)), 320.0, 32.0), value) then
-                        local data = quiver.file.get("asset/" .. value)
-                        local data = quiver.general.deserialize(data)
-
-                        for _, entity in ipairs(data.data) do
-                            entity.__help = {
-                                locate = entity.__type,
-                                active = false
-                            }
-                            entity.__type = nil
-                        end
-
-                        status.system:set_model(data.file)
-                        self.level_file = data.file
-
-                        self.entity = data.data
-
-                        table.restore_meta(self.entity)
-
-                        -- update the camera.
-                        self.camera_3d.point = vector_3:new(0.0, 8.0, 4.0)
-                        self.camera_3d.focus = vector_3:new(0.0, 0.0, 0.0)
-                        self.camera_3d.zoom = 90.0
-                    end
-                end
-            end)
-    else
-        local function draw_main_bar(self)
-            local x, y = quiver.window.get_shape()
-
-            quiver.draw_2d.draw_box_2_round(box_2:old(8.0, 8.0, x - 16.0, 48.0), 0.25, 4.0, color:grey())
-
-            if lobby:button_toggle(status, box_2:old(16.0 + (36.0 * 0.0), 16.0, 32.0, 32.0), "video/editor/point.png", not (self.widget == WIDGET_KIND.POINT)) then
-                self.widget = WIDGET_KIND.POINT
-            end
-            if lobby:button_toggle(status, box_2:old(16.0 + (36.0 * 1.0), 16.0, 32.0, 32.0), "video/editor/angle.png", not (self.widget == WIDGET_KIND.ANGLE)) then
-                self.widget = WIDGET_KIND.ANGLE
-            end
-            if lobby:button_toggle(status, box_2:old(16.0 + (36.0 * 2.0), 16.0, 32.0, 32.0), "video/editor/scale.png", not (self.widget == WIDGET_KIND.SCALE)) then
-                self.widget = WIDGET_KIND.SCALE
-            end
-            if lobby:button(status, box_2:old(16.0 + (36.0 * 3.0), 16.0, 32.0, 32.0), "video/editor/save.png") then
-                local save = {}
-                save.file = self.level_file
-                save.data = table.copy(self.entity)
-
-                for _, entity in ipairs(save.data) do
-                    entity.__type = entity.__help.locate
-                    entity.__help = nil
-                end
-
-                local file = string.sub(self.level_file, #"video/level/" + 1.0)
-                file = string.tokenize(file, "([^.]+)")[1]
-
-                quiver.file.set("asset/level/" .. file .. ".json", quiver.general.serialize(save))
-            end
-            if lobby:button(status, box_2:old(16.0 + (36.0 * 4.0), 16.0, 32.0, 32.0), "video/editor/load.png") then
-                lobby.editor = editor:new(status)
-            end
-            if lobby:button(status, box_2:old(16.0 + (36.0 * 5.0), 16.0, 32.0, 32.0), "video/editor/exit.png") then
-                lobby.layout = 0.0
-                lobby.editor = editor:new(status)
-            end
-            if lobby:button(status, box_2:old(16.0 + (36.0 * 6.0), 16.0, 32.0, 32.0), "video/editor/reload.png") then
-                status.system:set_model(self.level_file, true)
-            end
-            self.level_wire = lobby:toggle(status, box_2:old(16.0 + (36.0 * 7.0), 16.0, 32.0, 32.0), "Wire",
-                self.level_wire)
-
-            self.snap = lobby:slider(status, box_2:old(16.0 + (36.0 * 11.0), 16.0, 128.0, 32.0), "Snap",
-                self.snap, 0.25, 4.0, 0.25)
-        end
-
-        local function draw_side_bar(self)
-            local x, y = quiver.window.get_shape()
-            local box = box_2:old(8.0, 64.0, x * 0.5, y - 72.0)
-            local half = (y * 0.5) - 48.0
-            local point_a = vector_2:old(16.0, box.y + 8.0 * 1.0 + half * 0.0)
-            local point_b = vector_2:old(16.0, box.y + 8.0 * 2.0 + half * 1.0)
-            local box_a = box_2:old(point_a.x, point_a.y, box.width - 16.0, half)
-            local box_b = box_2:old(point_b.x, point_b.y, box.width - 16.0, half)
-
-            quiver.draw_2d.draw_box_2_round(box, 0.05, 4.0, color:grey())
-
-            self.scroll[1][1], self.scroll[1][2] = lobby:scroll(status, box_a, self.scroll[1][1], self.scroll[1][2],
-                function()
-                    local i = 0.0
-
-                    for name, value in pairs(ENTITY_LIST) do
-                        if lobby:button(status, box_2:old(box_a.x + 4.0, box_a.y + 4.0 + (32.0 * i), box_a.width - 8.0, 32.0), name) then
-                            local point = self.camera_3d.point +
-                                (self.camera_3d.focus - self.camera_3d.point):normalize() * 8.0
-                            point = point:snap(self.snap)
-
-                            local entity = {}
-                            entity.__help = {
-                                locate = name,
-                                active = true
-                            }
-                            entity.point = vector_3:new(0.0, 0.0, 0.0)
-                            entity.angle = vector_3:new(0.0, 0.0, 0.0)
-                            entity.scale = vector_3:new(1.0, 1.0, 1.0)
-                            entity.point:copy(point)
-
-                            table.restore_meta(entity)
-
-                            table.insert(self.entity, entity)
-                        end
-
-                        i = i + 1.0
-                    end
-                end)
-        end
-
-        local point = vector_2:old(0.0, 0.0)
-        local shape = vector_2:old(quiver.window.get_shape())
-
-        for i = #self.entity, 1, -1 do
-            local entity = self.entity[i]
-            local locate = ENTITY_LIST[entity.__help.locate]
-
-            local x = LOGGER_FONT:measure_text(entity.__help.locate, LOGGER_FONT_SCALE, LOGGER_FONT_SPACE)
-            x = x * 0.5
-
-            point:set(quiver.draw_3d.get_world_to_screen(self.camera_3d,
-                entity.point + vector_3:old(0.0, locate.box.max.y + 0.5, 0.0), shape))
-            point.x = point.x - x
-
-            LOGGER_FONT:draw(entity.__help.locate, point, LOGGER_FONT_SCALE, LOGGER_FONT_SPACE,
-                entity.__help.active and color:green() or color:red())
-        end
-
-        draw_main_bar(self)
-
-        if quiver.input.board.get_down(INPUT_BOARD.TAB) then
-            draw_side_bar(self)
-        end
-    end
-
-    -- if the active device is not the mouse...
-    if not (lobby.window.device == INPUT_DEVICE.MOUSE) then
-        -- make it exclusively be the mouse.
-        lobby.window:set_device(INPUT_DEVICE.MOUSE)
-    end
-
-    -- close window.
-    lobby.window:close(true)
-end
-
-function editor:widget_movement()
-    local result = vector_3:old(0.0, 0.0, 0.0)
-    local key_w = (quiver.input.board.get_press(INPUT_BOARD.W) or quiver.input.board.get_press_repeat(INPUT_BOARD.W))
-    local key_a = (quiver.input.board.get_press(INPUT_BOARD.A) or quiver.input.board.get_press_repeat(INPUT_BOARD.A))
-    local key_s = (quiver.input.board.get_press(INPUT_BOARD.S) or quiver.input.board.get_press_repeat(INPUT_BOARD.S))
-    local key_d = (quiver.input.board.get_press(INPUT_BOARD.D) or quiver.input.board.get_press_repeat(INPUT_BOARD.D))
-
-    result.x = key_a and 1.0 * -1.0 or result.x
-    result.x = key_d and 1.0 or result.x
-
-    _, result.y = quiver.input.mouse.get_wheel()
-
-    result.y = result.y
-
-    result.z = key_w and 1.0 * -1.0 or result.z
-    result.z = key_s and 1.0 or result.z
-
-    return result
+---2D draw logic for a given entity.
+---@param entity table  # The entity.
+function editor:draw_entity_2d(entity)
+    local point  = vector_2:old(0.0, 0.0)
+    local shape  = vector_2:old(quiver.window.get_shape())
+    local locate = ENTITY_LIST[entity.__help.locate]
+
+    --[[]]
+
+    -- measure the name of the entity.
+    local x = LOGGER_FONT:measure_text(entity.__help.locate, LOGGER_FONT_SCALE, LOGGER_FONT_SPACE)
+    x       = x * 0.5
+
+    -- get the 2D screen position for the 3D world position of the name.
+    point:set(quiver.draw_3d.get_world_to_screen(self.camera_3d,
+        entity.point + vector_3:old(0.0, locate.help.box.max.y + 0.5, 0.0), shape))
+
+    -- center text.
+    point.x = point.x - x
+
+    -- draw text.
+    LOGGER_FONT:draw(entity.__help.locate, point, LOGGER_FONT_SCALE, LOGGER_FONT_SPACE,
+        entity.__help.active and color:green() or color:red())
 end

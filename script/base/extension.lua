@@ -273,6 +273,14 @@ function math.direction_from_euler(angle)
 	return d_x, d_y, d_z
 end
 
+function math.degree_to_radian(value)
+	return value * (math.pi / 180.0)
+end
+
+function math.radian_to_degree(value)
+	return value * (180.0 / math.pi)
+end
+
 function math.out_sine(value)
 	return math.sin((value * math.pi) * 0.5)
 end

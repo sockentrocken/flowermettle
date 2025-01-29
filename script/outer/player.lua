@@ -72,6 +72,8 @@ function player:new(status, previous)
 	status.system:set_texture("video/cross.png")
 	status.system:set_texture("video/plaque.png")
 
+	print(i.value_4)
+
 	return i
 end
 
@@ -188,6 +190,10 @@ function player:draw_2d(status)
 	hunter:draw_2d(status)
 	weapon_a:draw_2d(status, 0.0)
 	weapon_b:draw_2d(status, 1.0)
+
+	if quiver.input.board.get_down(INPUT_BOARD.SPACE) then
+		self.speed.y = 32.0
+	end
 end
 
 --[[----------------------------------------------------------------]]

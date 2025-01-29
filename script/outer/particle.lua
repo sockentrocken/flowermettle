@@ -53,6 +53,7 @@ function particle:new(status, previous, point, direction, count, random, image)
 				random.z
 			),
 			angle = math.random(0.0, 360.0),
+			scale = math.random(2.0, 4.000),
 			image = "video/" .. image .. "_" .. math.random(1, 3) .. ".png"
 		})
 	end
@@ -75,7 +76,7 @@ end
 
 function particle:tick(status, step)
 	-- decremet time.
-	self.time = self.time + step * 3.0
+	self.time = self.time + step * 4.0
 
 	-- if time is over 1.0, detach us.
 	if self.time >= 1.0 then
@@ -87,6 +88,8 @@ function particle:draw_3d(status)
 	local color = color:white()
 	local shape = box_2:old(math.snap(32.0, self.time * 128.0), 0.0, 32.0, 32.0)
 
+	--color.a = math.floor(255.0 * math.out_quad(1.0 - self.time))
+
 	-- for each particle in the particle list...
 	for _, particle in ipairs(self.data) do
 		-- smooth out point, angle.
@@ -96,10 +99,11 @@ function particle:draw_3d(status)
 			math.out_quad(self.time) * particle.point.z
 		)
 		local angle = math.out_quad(self.time) * particle.angle
+		local scale = math.out_quad(self.time) * particle.scale
 		local image = status.system:get_texture(particle.image)
 
 		-- draw particle.
 		image:draw_billboard_pro(status.outer.camera_3d, shape, self.point + point,
-			vector_3:y(), vector_2:one() * 3.0, vector_2:old(1.5, 1.5), angle, color)
+			vector_3:y(), vector_2:one() * scale, vector_2:one() * scale * 0.5, angle, color)
 	end
 end

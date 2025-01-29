@@ -13,29 +13,20 @@
 -- OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 -- PERFORMANCE OF THIS SOFTWARE.
 
----@class level : entity
-level = entity:new()
+---@class door : entity
+door = entity:new()
 
----Create a new level.
+---Create a new door.
 ---@param status status # The game status.
----@return level value # The level.
-function level:new(status, previous)
+---@return door value # The door.
+function door:new(status, previous)
 	local i = entity:new(status, previous)
 	setmetatable(i, self)
 	getmetatable(i).__index = self
 
 	--[[]]
 
-	i.__type = "level"
-
-	if status then
-		status.system:set_model("video/character.glb")
-	end
+	i.__type = "door"
 
 	return i
-end
-
-function level:draw_3d(status)
-	local model = status.system:get_model("video/character.glb")
-	model:draw(self.point - vector_3:old(0.0, 1.0, 0.0), 0.5, color:red())
 end

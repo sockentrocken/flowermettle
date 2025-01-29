@@ -153,7 +153,14 @@ end
 ---@param value vector_2 # The vector to calculate the angle to.
 ---@return number value # The magnitude.
 function vector_2:angle(value)
-	return -math.atan2(value.y - self.y, value.x - self.x)
+	local result = 0.0;
+
+	local dot = self.x * value.x + self.y * value.y;
+	local det = self.x * value.y - self.y * value.x;
+
+	result = math.atan2(det, dot);
+
+	return result;
 end
 
 ---Scale a vector by the current 2D camera's zoom scale.
@@ -370,6 +377,19 @@ function vector_3:rotate_axis_angle(axis, angle)
 	return vector_3:old(self.x + wv.x + wwv.x, self.y + wv.y + wwv.y, self.z + wv.z + wwv.z)
 end
 
+function vector_3:rotate_vector_4(q)
+	local result = vector_3:old(0.0, 0.0, 0.0);
+
+	result.x = self.x * (q.x * q.x + q.w * q.w - q.y * q.y - q.z * q.z) + self.y * (2 * q.x * q.y - 2 * q.w * q.z) +
+		self.z * (2 * q.x * q.z + 2 * q.w * q.y);
+	result.y = self.x * (2 * q.w * q.z + 2 * q.x * q.y) + self.y * (q.w * q.w - q.x * q.x + q.y * q.y - q.z * q.z) +
+		self.z * (-2 * q.w * q.x + 2 * q.y * q.z);
+	result.z = self.x * (-2 * q.w * q.y + 2 * q.x * q.z) + self.y * (2 * q.w * q.x + 2 * q.y * q.z) +
+		self.z * (q.w * q.w - q.x * q.x - q.y * q.y + q.z * q.z);
+
+	return result;
+end
+
 vector_3_pool = table_pool:new(vector_3, POOL_VECTOR_3_AMOUNT, "vector_3")
 
 --[[----------------------------------------------------------------]]
@@ -520,6 +540,24 @@ function vector_4:normalize()
 	else
 		return self
 	end
+end
+
+function vector_4:from_euler(pitch, yaw, roll)
+	local result = vector_4:old(0.0, 0.0, 0.0, 0.0);
+
+	local x0 = math.cos(pitch * 0.5);
+	local x1 = math.sin(pitch * 0.5);
+	local y0 = math.cos(yaw * 0.5);
+	local y1 = math.sin(yaw * 0.5);
+	local z0 = math.cos(roll * 0.5);
+	local z1 = math.sin(roll * 0.5);
+
+	result.x = x1 * y0 * z0 - x0 * y1 * z1;
+	result.y = x0 * y1 * z0 + x1 * y0 * z1;
+	result.z = x0 * y0 * z1 - x1 * y1 * z0;
+	result.w = x0 * y0 * z0 + x1 * y1 * z1;
+
+	return result;
 end
 
 vector_4_pool = table_pool:new(vector_4, POOL_VECTOR_4_AMOUNT)

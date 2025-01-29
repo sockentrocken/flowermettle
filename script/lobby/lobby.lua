@@ -135,6 +135,9 @@ function lobby:new(status)
 	status.system:set_texture("video/logo_b.png")
 	status.system:set_texture("video/logo_c.png")
 
+	i.grain = quiver.shader.new("asset/video/shader/base.vs", "asset/video/shader/grain.fs")
+	i.grain_location = i.grain:get_location_name("time")
+
 	-- collect garbage.
 	collectgarbage("collect")
 
@@ -147,12 +150,12 @@ local REEL_TIME = 22.5
 ---Draw the lobby.
 ---@param status status # The game status.
 function lobby:draw(status)
-	local shape = vector_2:old(quiver.window.get_shape())
-	self.camera_2d.zoom = math.clamp(0.25, 4.0, math.snap(0.25, shape.y / 640.0))
+	--local shape = vector_2:old(quiver.window.get_shape())
+	--self.camera_2d.zoom = math.clamp(0.25, 4.0, math.snap(0.25, shape.y / 640.0))
 
-	if quiver.window.get_resize() then
-		quiver.input.mouse.set_scale(vector_2:old(1.0 / self.camera_2d.zoom, 1.0 / self.camera_2d.zoom))
-	end
+	--if quiver.window.get_resize() then
+	--	quiver.input.mouse.set_scale(vector_2:old(1.0 / self.camera_2d.zoom, 1.0 / self.camera_2d.zoom))
+	--end
 
 	local delta = quiver.general.get_frame_time()
 
@@ -161,7 +164,22 @@ function lobby:draw(status)
 
 	if self.time < REEL_TIME and self.reel and self.user.video_reel and not ACTION_RETURN:press() then
 		-- draw 2D view.
-		quiver.draw_2d.begin(function() self:layout_reel(status) end, self.camera_2d)
+		status.render:begin(function()
+			quiver.draw.clear(color:black())
+			quiver.draw_2d.begin(function() self:layout_reel(status) end, self.camera_2d)
+		end)
+
+		self.grain:set_shader_decimal(self.grain_location, quiver.general.get_time())
+
+		-- begin screen-space shader.
+		self.grain:begin(function()
+			local x, y = quiver.window.get_shape()
+			local render = box_2:old(0.0, 0.0, status.render.shape_x, -status.render.shape_y)
+			local window = box_2:old(0.0, 0.0, x, y)
+
+			-- draw 3D view, as render-texture.
+			status.render:draw_pro(render, window, vector_2:zero(), 0.0, color:white())
+		end)
 		return
 	else
 		self.reel = false
@@ -170,7 +188,7 @@ function lobby:draw(status)
 	-- if current layout is editor...
 	if self.layout == LOBBY_LAYOUT.EDITOR then
 		-- draw editor.
-		self.editor:draw(self, status)
+		self.editor:draw(status)
 		return
 	end
 
@@ -251,6 +269,8 @@ function lobby:draw(status)
 	end, self.camera_2d)
 end
 
+--[[----------------------------------------------------------------]]
+
 ---Layout: reel.
 ---@param status status # The status.
 function lobby:layout_reel(status)
@@ -269,13 +289,13 @@ function lobby:layout_reel(status)
 	local logo_a       = status.system:get_texture("video/logo_a.png")
 	local logo_b       = status.system:get_texture("video/logo_b.png")
 	local logo_c       = status.system:get_texture("video/logo_c.png")
-	local logo_a_point = vector_2:old(shape.x - logo_a.shape_x * 0.5, shape.y - logo_a.shape_y * 0.5)
-	local logo_b_point = vector_2:old(shape.x - logo_b.shape_x * 0.5, shape.y - logo_b.shape_y * 0.5)
-	local logo_c_point = vector_2:old(shape.x - logo_c.shape_x * 0.5, shape.y - logo_c.shape_y * 0.5)
+	local logo_a_point = vector_2:old(shape.x - logo_a.shape_x * 0.5, shape.y - logo_a.shape_y * 0.5) * 0.5
+	local logo_b_point = vector_2:old(shape.x - logo_b.shape_x * 0.5, shape.y - logo_b.shape_y * 0.5) * 0.5
+	local logo_c_point = vector_2:old(shape.x - logo_c.shape_x * 0.5, shape.y - logo_c.shape_y * 0.5) * 0.5
 
-	--logo_a:draw(logo_a_point, 0.0, 1.0, logo_a_color)
-	--logo_b:draw(logo_b_point, 0.0, 1.0, logo_b_color)
-	logo_c:draw(logo_c_point, 0.0, 1.0, color:white())
+	logo_a:draw(logo_a_point, 0.0, 0.5, logo_a_color)
+	logo_b:draw(logo_b_point, 0.0, 0.5, logo_b_color)
+	logo_c:draw(logo_c_point, 0.0, 0.5, logo_c_color)
 end
 
 ---Layout: main.
@@ -606,8 +626,6 @@ function lobby:layout_exit(status)
 		status.active = false
 	end
 end
-
---[[----------------------------------------------------------------]]
 
 -- TO-DO parm desc
 -- TO-DO re-order label.
