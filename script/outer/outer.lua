@@ -47,7 +47,8 @@ function outer:new(status, level)
 	status.outer   = i
 
 	i.__type       = "outer"
-	i.camera_3d    = camera_3d:new(vector_3:new(4.0, 4.0, 4.0), vector_3:new(0.0, 0.0, 0.0), vector_3:new(0.0, 1.0, 0.0),
+	i.camera_3d    = camera_3d:new(vector_3:new(16.0, 16.0, 16.0), vector_3:new(0.0, 0.0, 0.0),
+		vector_3:new(0.0, 1.0, 0.0),
 		90.0, CAMERA_3D_KIND.PERSPECTIVE)
 	i.camera_2d    = camera_2d:new(vector_2:new(0.0, 0.0), vector_2:new(0.0, 0.0), 0.0, 1.0)
 	i.time         = 0.0
@@ -70,46 +71,15 @@ function outer:new(status, level)
 	status.lobby.layout = 0.0
 	status.lobby.active = false
 
-	-- locate the actual path to the level, load it into memory, then deserialize it to a table.
-	level = quiver.general.deserialize(quiver.file.get(status.system:find(level)))
+	level = status.level.initial[math.random(1, table.hash_length(status.level.initial))]
 
-	-- store the pointer to the level model.
-	i.level = level.file
+	i.box_list = {}
+	i.lev_list = {}
 
 	-- create rigid body for level geometry.
 	i.level_rigid = i.rapier:rigid_body(0.0)
 
-	-- load model, bind to light shader.
-	local model = status.system:set_model(i.level)
-	model:bind_shader(1.0, status.light.shader)
-
-	-- for each mesh in the model...
-	for x = 0, model.mesh_count - 1.0 do
-		-- load the convex hull, and parent it to the level rigid body.
-		i.rapier:collider_builder_convex_hull(model:mesh_vertex(x), i.level_rigid)
-	end
-
-	-- for each entity in the level...
-	for _, entity in ipairs(level.data) do
-		-- find the table class.
-		local table_class = _G[entity.__type]
-
-		-- if table class is not nil...
-		if table_class then
-			-- if table class has a constructor...
-			if table_class.new then
-				-- TO-DO: this doesn't load custom data unless it's .point, .angle, or .scale. fix.
-				table.restore_meta(entity)
-				table_class.new(table_class, status, entity)
-			else
-				-- error.
-				error("outer::new(): Entity \"" .. entity.__type .. "\" has no \"new\" constructor.")
-			end
-		else
-			-- error.
-			error("outer::new(): Entity \"" .. entity.__type .. "\" has no table-class.")
-		end
-	end
+	i:create_level(status, level)
 
 	-- run post-load logic for each entity.
 	for _, entity in pairs(i.entity) do
@@ -123,6 +93,191 @@ function outer:new(status, level)
 
 	return i
 end
+
+function collision_box_box_3(box_a, box_b)
+	local collision = true;
+
+	if ((box_a.max.x >= box_b.min.x) and (box_a.min.x <= box_b.max.x)) then
+		if ((box_a.max.y <= box_b.min.y) or (box_a.min.y >= box_b.max.y)) then collision = false end;
+		if ((box_a.max.z <= box_b.min.z) or (box_a.min.z >= box_b.max.z)) then collision = false end;
+	else
+		collision = false
+	end;
+
+	return collision;
+end
+
+function outer:check_collision(box)
+	for _, value in ipairs(self.box_list) do
+		if collision_box_box_3(box, value) then
+			return true
+		end
+	end
+
+	return false
+end
+
+function outer:create_level(status, level, past, point, angle, loop)
+	level = table.copy(level)
+
+	if loop and loop > 2.0 then
+		return
+	end
+
+	local point = vector_3:old(0.0, 0.0, 0.0)
+	local angle = vector_3:old(0.0, math.degree_to_radian(0.0), 0.0)
+
+	if past then
+		local past_direction = math.direction_from_euler(past.angle)
+		past_direction = past_direction * -1.0
+
+		local where = 0.0
+		local index = nil
+
+		-- for each entity in the level...
+		for i, entity in ipairs(level.data) do
+			-- find the table class.
+			local table_class = _G[entity.__type]
+
+			-- if table class is not nil...
+			if table_class then
+				table.restore_meta(entity)
+
+				if entity.__type == "door" then
+					local door_angle = math.direction_from_euler(entity.angle)
+					local real_angle = door_angle:angle(past_direction)
+
+					local real_point = entity.point:rotate_vector_4(vector_4:from_euler(
+						0.0,
+						real_angle,
+						0.0
+					))
+
+					local difference = (past.point - real_point):magnitude()
+
+					if difference >= where and not entity.close then
+						point = past.point - real_point
+						angle = vector_3:old(0.0, real_angle, 0.0)
+						where = difference
+						index = i
+					end
+				end
+			end
+		end
+
+		level.data[index].close = true
+	end
+
+	-- load model, bind to light shader.
+	local model = status.system:set_model(level.file)
+
+	-- check if level might be colliding with any other level.
+	local min_x, min_y, min_z, max_x, max_y, max_z = model:get_box_3()
+	local min = vector_3:old(min_x, min_y, min_z)
+	local max = vector_3:old(max_x, max_y, max_z)
+
+	--[[]]
+
+	min = min:rotate_vector_4(vector_4:from_euler(
+		angle.x,
+		angle.y,
+		angle.z
+	))
+	min.x = min.x + point.x
+	min.y = min.y + point.y
+	min.z = min.z + point.z
+
+	--[[]]
+
+	max = max:rotate_vector_4(vector_4:from_euler(
+		angle.x,
+		angle.y,
+		angle.z
+	))
+	max.x = max.x + point.x
+	max.y = max.y + point.y
+	max.z = max.z + point.z
+
+	local box = box_3:new(min, max)
+
+	if self:check_collision(box) then
+		return
+	end
+
+	table.insert(self.box_list, box)
+	table.insert(self.lev_list, {
+		model = level.file,
+		point = vector_3:new(point.x, point.y, point.z),
+		angle = vector_3:new(angle.x, angle.y, angle.z),
+	})
+
+	model:bind_shader(1.0, status.light.shader)
+
+	-- for each mesh in the model...
+	for x = 0, model.mesh_count - 1.0 do
+		local vertex = model:mesh_vertex(x)
+
+		for i, v in ipairs(vertex) do
+			vertex[i] = vector_3:old(v.x, v.y, v.z)
+			vertex[i] = vertex[i]:rotate_vector_4(vector_4:from_euler(
+				angle.x,
+				angle.y,
+				angle.z
+			))
+			vertex[i].x = vertex[i].x + point.x
+			vertex[i].y = vertex[i].y + point.y
+			vertex[i].z = vertex[i].z + point.z
+		end
+
+		-- load the convex hull, and parent it to the level rigid body.
+		self.rapier:collider_builder_convex_hull(vertex, self.level_rigid)
+	end
+
+	-- for each entity in the level...
+	for _, entity in ipairs(level.data) do
+		-- find the table class.
+		local table_class = _G[entity.__type]
+
+		-- if table class is not nil...
+		if table_class then
+			table.restore_meta(entity)
+
+			-- if table class has a constructor...
+			if table_class.new then
+				entity.point:copy(entity.point:rotate_vector_4(vector_4:from_euler(
+					angle.x,
+					angle.y,
+					angle.z
+				)))
+				entity.point.x = entity.point.x + point.x
+				entity.point.y = entity.point.y + point.y
+				entity.point.z = entity.point.z + point.z
+				entity.angle.x = entity.angle.x + math.radian_to_degree(angle.y)
+				entity.angle.y = entity.angle.y + math.radian_to_degree(angle.x)
+				entity.angle.z = entity.angle.z + math.radian_to_degree(angle.z)
+
+				if entity.__type == "door" and not entity.close then
+					entity.close = true
+					local level = status.level.regular[math.random(1, table.hash_length(status.level.regular))]
+					self:create_level(status, level, entity, nil, nil, loop and loop + 1.0 or 1.0)
+				end
+
+				table_class.new(table_class, status, entity)
+			else
+				-- error.
+				error("outer::new(): Entity \"" .. entity.__type .. "\" has no \"new\" constructor.")
+			end
+		else
+			-- error.
+			error("outer::new(): Entity \"" .. entity.__type .. "\" has no table-class.")
+		end
+	end
+end
+
+local ONE_TENTH = vector_3:new(0.1, 0.1, 0.1)
+local COLOR_X = color:new(255.0, 0.0, 0.0, 255.0)
+local COLOR_Y = color:new(0.0, 255.0, 0.0, 255.0)
+local COLOR_Z = color:new(0.0, 0.0, 255.0, 255.0)
 
 function outer:draw(status)
 	local shape = vector_2:old(quiver.window.get_shape())
@@ -189,7 +344,7 @@ function outer:draw(status)
 	-- begin render-texture.
 	status.render:begin(function()
 		-- clear screen.
-		quiver.draw.clear(color:white())
+		quiver.draw.clear(color:black())
 
 		-- begin 3D view.
 		quiver.draw_3d.begin(function()
@@ -200,24 +355,47 @@ function outer:draw(status)
 			for _, entity in pairs(self.entity) do
 				if entity.draw_3d then
 					-- save entity point, angle.
-					new_point:copy(entity.point)
-					new_angle:copy(entity.angle)
+					--new_point:copy(entity.point)
+					--new_angle:copy(entity.angle)
 
 					--- interpolate old/new point, angle.
-					entity.point:copy(entity.point * alpha + entity.point_old * (1.0 - alpha))
-					entity.angle:copy(entity.angle * alpha + entity.angle_old * (1.0 - alpha))
+					--entity.point:copy(entity.point * alpha + entity.point_old * (1.0 - alpha))
+					--entity.angle:copy(entity.angle * alpha + entity.angle_old * (1.0 - alpha))
 
 					entity:draw_3d(status)
 
+
+					-- draw angle help.
+					local x, y, z = math.direction_from_euler(entity.angle)
+					x = entity.point + x * 2.0
+					y = entity.point + y * 2.0
+					z = entity.point + z * 2.0
+
+					quiver.draw_3d.draw_cube(x, ONE_TENTH, COLOR_X)
+					quiver.draw_3d.draw_cube(y, ONE_TENTH, COLOR_Y)
+					quiver.draw_3d.draw_cube(z, ONE_TENTH, COLOR_Z)
+
+					quiver.draw_3d.draw_line(entity.point, x, COLOR_X)
+					quiver.draw_3d.draw_line(entity.point, y, COLOR_Y)
+					quiver.draw_3d.draw_line(entity.point, z, COLOR_Z)
+
 					-- load entity point, angle.
-					entity.point:copy(new_point)
-					entity.angle:copy(new_angle)
+					--entity.point:copy(new_point)
+					--entity.angle:copy(new_angle)
 				end
 			end
 
 			-- draw level.
-			local level = status.system:get_model(self.level)
-			level:draw(vector_3:zero(), 1.0, color:old(127.0, 127.0, 127.0, 255.0))
+			for _, level in ipairs(self.lev_list) do
+				local model = status.system:get_model(level.model)
+				model:draw_transform(level.point,
+					vector_3:old(
+						math.radian_to_degree(level.angle.x),
+						math.radian_to_degree(level.angle.y),
+						math.radian_to_degree(level.angle.z)
+					),
+					vector_3:one(), color:white())
+			end
 
 			--self.rapier:debug_render()
 		end, self.camera_3d)

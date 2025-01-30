@@ -49,7 +49,7 @@ function actor:new(status, previous)
 end
 
 function actor:tick(status, step)
-	self:movement(status, step, vector_3:zero(), 0.0)
+	--self:movement(status, step, vector_3:zero(), 0.0)
 end
 
 --[[----------------------------------------------------------------]]

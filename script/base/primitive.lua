@@ -390,6 +390,24 @@ function vector_3:rotate_vector_4(q)
 	return result;
 end
 
+---Get the angle between the current vector, and a given one.
+---@param value vector_3 # The vector to calculate the angle to.
+---@return number value # The magnitude.
+function vector_3:angle(value)
+	local result = 0.0;
+
+	local cross = vector_3:old(
+		self.y * value.z - self.z * value.y,
+		self.z * value.x - self.x * value.z,
+		self.x * value.y - self.y * value.x
+	);
+	local len = math.sqrt(cross.x * cross.x + cross.y * cross.y + cross.z * cross.z);
+	local dot = (self.x * value.x + self.y * value.y + self.z * value.z);
+	result = math.atan2(len, dot);
+
+	return result;
+end
+
 vector_3_pool = table_pool:new(vector_3, POOL_VECTOR_3_AMOUNT, "vector_3")
 
 --[[----------------------------------------------------------------]]

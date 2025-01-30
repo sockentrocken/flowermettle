@@ -99,6 +99,8 @@ function player:tick(status, step)
 
 	local floor = self.floor
 
+	print(self.enemy_count)
+
 	self:movement(status, step, movement:normalize(), movement:magnitude())
 
 	if self.floor and not floor then

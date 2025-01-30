@@ -58,7 +58,6 @@ function table_pool:get()
 
     -- index overflow!
     if self.index > self.count then
-        error("index overflow: " .. self.name)
         -- create a new table.
         self[self.index] = self.kind:default()
         -- update our known table pool size.
