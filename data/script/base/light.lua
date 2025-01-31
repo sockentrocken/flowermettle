@@ -19,10 +19,9 @@ local LIGHT_MAXIMUM = 4.0
 light_manager = {}
 
 ---Create a new light_manager.
----@param v_path string # The path to the .vs file.
----@param f_path string # The path to the .fs file.
+---@param shader shader # The light shader.
 ---@return light_manager value # The light_manager.
-function light_manager:new(v_path, f_path)
+function light_manager:new(shader)
 	local i = {}
 	setmetatable(i, self)
 	getmetatable(i).__index = self
@@ -30,7 +29,7 @@ function light_manager:new(v_path, f_path)
 	--[[]]
 
 	i.__type = "light_manager"
-	i.shader = quiver.shader.new(v_path, f_path)
+	i.shader = shader
 	i.point_list = {
 		light:new(i, 0.0, true),
 		light:new(i, 1.0, true),

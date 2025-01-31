@@ -13,14 +13,6 @@
 -- OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 -- PERFORMANCE OF THIS SOFTWARE.
 
-require "script/outer/entity"
-require "script/outer/door"
-require "script/outer/actor"
-require "script/outer/enemy"
-require "script/outer/player"
-require "script/outer/zombie"
-require "script/outer/particle"
-require "script/outer/projectile"
 
 local TIME_STEP = 1.0 / 60.0
 local ACTION_TOGGLE = action:new(
@@ -36,7 +28,7 @@ outer = {}
 ---Create a new outer state (in-game state).
 ---@param level string # The path to the game level.
 ---@return outer value # The outer state.
-function outer:new(status, level)
+function outer:new(status)
 	local i = {}
 	setmetatable(i, {
 		__index = self
@@ -56,6 +48,8 @@ function outer:new(status, level)
 	i.entity       = {}
 	i.entity_index = 1.0
 	i.rapier       = quiver.rapier:new()
+	i.level_list   = {}
+	i.level_rigid  = i.rapier:rigid_body(0.0)
 
 	--[[]]
 
@@ -71,14 +65,10 @@ function outer:new(status, level)
 	status.lobby.layout = 0.0
 	status.lobby.active = false
 
-	level = status.level.initial[math.random(1, table.hash_length(status.level.initial))]
+	-- pick a random level out of the initial level pool.
+	local level = status.level.initial[math.random(1, table.hash_length(status.level.initial))]
 
-	i.box_list = {}
-	i.lev_list = {}
-
-	-- create rigid body for level geometry.
-	i.level_rigid = i.rapier:rigid_body(0.0)
-
+	-- create the level.
 	i:create_level(status, level)
 
 	-- run post-load logic for each entity.
@@ -107,30 +97,33 @@ function collision_box_box_3(box_a, box_b)
 	return collision;
 end
 
-function outer:check_collision(box)
-	for _, value in ipairs(self.box_list) do
-		if collision_box_box_3(box, value) then
-			return true
-		end
+---Recursively create a new level.
+---@param status status # The game status.
+---@param level  table  # The current level.
+---@param entry? table  # The current entry.
+---@param shape? table  # The current shape list.
+---@param depth? number # The current recursion depth.
+function outer:create_level(status, level, entry, shape, depth)
+	if not shape then
+		shape = {}
 	end
 
-	return false
-end
+	if depth and depth > 1.0 then
+		return false
+	end
 
-function outer:create_level(status, level, past, point, angle, loop)
 	level = table.copy(level)
 
-	if loop and loop > 2.0 then
-		return
-	end
-
 	local point = vector_3:old(0.0, 0.0, 0.0)
-	local angle = vector_3:old(0.0, math.degree_to_radian(0.0), 0.0)
+	local angle = vector_3:old(0.0, 0.0, 0.0)
 
-	if past then
-		local past_direction = math.direction_from_euler(past.angle)
-		past_direction = past_direction * -1.0
+	-- if we have a current entry to close...
+	if entry then
+		-- get the direction of the entry, and negate it, to get the angle between it and a potential new entry.
+		local entry_direction = math.direction_from_euler(entry.angle)
+		entry_direction = entry_direction * -1.0
 
+		-- distance from current entry to the best entry, and index of best entry.
 		local where = 0.0
 		local index = nil
 
@@ -143,22 +136,28 @@ function outer:create_level(status, level, past, point, angle, loop)
 			if table_class then
 				table.restore_meta(entity)
 
-				if entity.__type == "door" then
+				-- if the entity is an entry...
+				if entity.__type == "entry" then
+					-- get the direction of this entry.
 					local door_angle = math.direction_from_euler(entity.angle)
-					local real_angle = door_angle:angle(past_direction)
 
+					-- get the angle between this entry, and the current entry.
+					local real_angle = door_angle:angle(entry_direction)
+
+					-- rotate this entry to face the current entry.
 					local real_point = entity.point:rotate_vector_4(vector_4:from_euler(
 						0.0,
 						real_angle,
 						0.0
 					))
 
-					local difference = (past.point - real_point):magnitude()
+					-- get the distance between the current entry, and this entry.
+					local real_where = (entry.point - real_point):magnitude()
 
-					if difference >= where and not entity.close then
-						point = past.point - real_point
+					if real_where >= where and not entity.close then
+						point = entry.point - real_point
 						angle = vector_3:old(0.0, real_angle, 0.0)
-						where = difference
+						where = real_where
 						index = i
 					end
 				end
@@ -175,37 +174,20 @@ function outer:create_level(status, level, past, point, angle, loop)
 	local min_x, min_y, min_z, max_x, max_y, max_z = model:get_box_3()
 	local min = vector_3:old(min_x, min_y, min_z)
 	local max = vector_3:old(max_x, max_y, max_z)
+	local b_shape = (((min * -1.0) + max) * 0.5) * 0.99
 
-	--[[]]
-
-	min = min:rotate_vector_4(vector_4:from_euler(
-		angle.x,
-		angle.y,
-		angle.z
-	))
-	min.x = min.x + point.x
-	min.y = min.y + point.y
-	min.z = min.z + point.z
-
-	--[[]]
-
-	max = max:rotate_vector_4(vector_4:from_euler(
-		angle.x,
-		angle.y,
-		angle.z
-	))
-	max.x = max.x + point.x
-	max.y = max.y + point.y
-	max.z = max.z + point.z
-
-	local box = box_3:new(min, max)
-
-	if self:check_collision(box) then
-		return
+	for _, value in ipairs(shape) do
+		if self.rapier:test_intersect_cuboid_cuboid(point, angle, b_shape, value.point, value.angle, value.shape) then
+			return false
+		end
 	end
 
-	table.insert(self.box_list, box)
-	table.insert(self.lev_list, {
+	table.insert(shape, {
+		point = vector_3:new(point.x, point.y, point.z),
+		angle = vector_3:new(angle.x, angle.y, angle.z),
+		shape = vector_3:new(b_shape.x, b_shape.y, b_shape.z),
+	})
+	table.insert(self.level_list, {
 		model = level.file,
 		point = vector_3:new(point.x, point.y, point.z),
 		angle = vector_3:new(angle.x, angle.y, angle.z),
@@ -244,6 +226,7 @@ function outer:create_level(status, level, past, point, angle, loop)
 
 			-- if table class has a constructor...
 			if table_class.new then
+				-- apply point and angle to entity.
 				entity.point:copy(entity.point:rotate_vector_4(vector_4:from_euler(
 					angle.x,
 					angle.y,
@@ -256,13 +239,7 @@ function outer:create_level(status, level, past, point, angle, loop)
 				entity.angle.y = entity.angle.y + math.radian_to_degree(angle.x)
 				entity.angle.z = entity.angle.z + math.radian_to_degree(angle.z)
 
-				if entity.__type == "door" and not entity.close then
-					entity.close = true
-					local level = status.level.regular[math.random(1, table.hash_length(status.level.regular))]
-					self:create_level(status, level, entity, nil, nil, loop and loop + 1.0 or 1.0)
-				end
-
-				table_class.new(table_class, status, entity)
+				table_class.new(table_class, status, entity, shape, depth)
 			else
 				-- error.
 				error("outer::new(): Entity \"" .. entity.__type .. "\" has no \"new\" constructor.")
@@ -272,6 +249,8 @@ function outer:create_level(status, level, past, point, angle, loop)
 			error("outer::new(): Entity \"" .. entity.__type .. "\" has no table-class.")
 		end
 	end
+
+	return true
 end
 
 local ONE_TENTH = vector_3:new(0.1, 0.1, 0.1)
@@ -299,6 +278,9 @@ function outer:draw(status)
 
 		-- toggle lobby state on.
 		status.lobby.active = true
+
+		-- collect garbage.
+		collectgarbage("collect")
 	end
 
 	--[[]]
@@ -364,20 +346,17 @@ function outer:draw(status)
 
 					entity:draw_3d(status)
 
-
 					-- draw angle help.
-					local x, y, z = math.direction_from_euler(entity.angle)
-					x = entity.point + x * 2.0
-					y = entity.point + y * 2.0
-					z = entity.point + z * 2.0
-
-					quiver.draw_3d.draw_cube(x, ONE_TENTH, COLOR_X)
-					quiver.draw_3d.draw_cube(y, ONE_TENTH, COLOR_Y)
-					quiver.draw_3d.draw_cube(z, ONE_TENTH, COLOR_Z)
-
-					quiver.draw_3d.draw_line(entity.point, x, COLOR_X)
-					quiver.draw_3d.draw_line(entity.point, y, COLOR_Y)
-					quiver.draw_3d.draw_line(entity.point, z, COLOR_Z)
+					--local x, y, z = math.direction_from_euler(entity.angle)
+					--x = entity.point + x * 2.0
+					--y = entity.point + y * 2.0
+					--z = entity.point + z * 2.0
+					--quiver.draw_3d.draw_cube(x, ONE_TENTH, COLOR_X)
+					--quiver.draw_3d.draw_cube(y, ONE_TENTH, COLOR_Y)
+					--quiver.draw_3d.draw_cube(z, ONE_TENTH, COLOR_Z)
+					--quiver.draw_3d.draw_line(entity.point, x, COLOR_X)
+					--quiver.draw_3d.draw_line(entity.point, y, COLOR_Y)
+					--quiver.draw_3d.draw_line(entity.point, z, COLOR_Z)
 
 					-- load entity point, angle.
 					--entity.point:copy(new_point)
@@ -386,23 +365,26 @@ function outer:draw(status)
 			end
 
 			-- draw level.
-			for _, level in ipairs(self.lev_list) do
+			for _, level in ipairs(self.level_list) do
 				local model = status.system:get_model(level.model)
 				model:draw_transform(level.point,
 					vector_3:old(
 						math.radian_to_degree(level.angle.x),
-						math.radian_to_degree(level.angle.y),
+						-math.radian_to_degree(level.angle.y),
 						math.radian_to_degree(level.angle.z)
 					),
 					vector_3:one(), color:white())
 			end
 
-			--self.rapier:debug_render()
+			if quiver.input.board.get_down(INPUT_BOARD.TAB) then
+				self.rapier:debug_render()
+			end
 		end, self.camera_3d)
 	end)
 
 	-- begin screen-space shader.
-	status.shader:begin(function()
+	local shader = status.system:get_shader("base")
+	shader:begin(function()
 		local shape = vector_2:old(quiver.window.get_shape())
 		local render = box_2:old(0.0, 0.0, status.render.shape_x, -status.render.shape_y)
 		local window = box_2:old(0.0, 0.0, shape.x, shape.y)

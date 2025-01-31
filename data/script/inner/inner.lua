@@ -13,24 +13,35 @@
 -- OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 -- PERFORMANCE OF THIS SOFTWARE.
 
----@class door : entity
-door = entity:new()
 
----Create a new door.
----@param status status # The game status.
----@return door value # The door.
-function door:new(status, previous)
-	local i = entity:new(status, previous)
-	setmetatable(i, self)
+
+---@class inner
+inner = {
+	__meta = {}
+}
+
+---Create a new inner state (in-menu state).
+---@return inner value # The inner state.
+function inner:new(status)
+	local i = {}
+	setmetatable(i, self.__meta)
 	getmetatable(i).__index = self
 
 	--[[]]
 
-	i.__type = "door"
+	status.inner = i
+
+	i.__type = "inner"
+	i.credit = 250.0
+	i.hunter = {
+		hunter:new(status)
+	}
+	i.weapon = {
+		weapon:new(status),
+		weapon:new(status),
+	}
+
+	collectgarbage("collect")
 
 	return i
-end
-
-function door:draw_3d(status)
-	quiver.draw_3d.draw_cube(self.point, vector_3:one(), color:blue())
 end

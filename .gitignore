@@ -1,11 +1,8 @@
 # Game data.
-asset/
+data/video
+data/audio
+data/level
+data/development
 
 # User data.
 user.json
-
-# LSP data.
-script/_meta.lua
-
-# Roadmap.
-plan

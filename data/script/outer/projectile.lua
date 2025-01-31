@@ -35,7 +35,7 @@ end
 function projectile:tick(status, step)
 	self.point:copy(self.point + (self.speed * step))
 
-	local collider = status.outer.rapier:test_intersect_cuboid(self.point, vector_3:one() * 0.5)
+	local collider = status.outer.rapier:test_intersect_cuboid(self.point, vector_3:zero(), vector_3:one() * 0.5)
 
 	-- if collider is not nil...
 	if collider then

@@ -13,13 +13,13 @@
 -- OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 -- PERFORMANCE OF THIS SOFTWARE.
 
-require "script/base/constant"
-require "script/base/extension"
-require "script/base/allocator"
-require "script/base/primitive"
-require "script/base/action"
-require "script/base/window"
-require "script/base/logger"
-require "script/base/file_system"
-require "script/base/path_finder"
-require "script/base/light"
+require "data/script/base/constant"
+require "data/script/base/extension"
+require "data/script/base/allocator"
+require "data/script/base/primitive"
+require "data/script/base/action"
+require "data/script/base/window"
+require "data/script/base/logger"
+require "data/script/base/file_system"
+require "data/script/base/path_finder"
+require "data/script/base/light"

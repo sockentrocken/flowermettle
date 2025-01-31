@@ -15,7 +15,7 @@
 
 local PLAYER_AIM_LENGTH = 4096.0
 local PLAYER_AIM_HELPER = vector_3:new(0.0, 0.1, 0.0)
-local CAMERA_POINT      = vector_3:new(0.0, 8.0, 4.0)
+local CAMERA_POINT      = vector_3:new(0.0, 16.0, 8.0)
 local CAMERA_SPEED      = 8.0
 
 ---@class player : actor
@@ -72,8 +72,6 @@ function player:new(status, previous)
 	status.system:set_texture("video/cross.png")
 	status.system:set_texture("video/plaque.png")
 
-	print(i.value_4)
-
 	return i
 end
 
@@ -98,8 +96,6 @@ function player:tick(status, step)
 	end
 
 	local floor = self.floor
-
-	print(self.enemy_count)
 
 	self:movement(status, step, movement:normalize(), movement:magnitude())
 
@@ -164,7 +160,7 @@ function player:draw_3d(status)
 	status.outer.camera_3d.focus:copy(self.camera_point + shake)
 
 	-- update the 2D camera.
-	--status.outer.camera_2d.shift:copy(shake * 16.0)
+	status.outer.camera_2d.shift:copy(shake * 16.0)
 
 	-- draw hunter, weapon.
 	hunter:draw_3d(status)
@@ -196,6 +192,8 @@ function player:draw_2d(status)
 	if quiver.input.board.get_down(INPUT_BOARD.SPACE) then
 		self.speed.y = 32.0
 	end
+
+	--quiver.draw_2d.draw_text("the midnight rush", vector_2:old(8.0, 8.0), 32.0, color:red())
 end
 
 --[[----------------------------------------------------------------]]

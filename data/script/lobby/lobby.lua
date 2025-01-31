@@ -13,9 +13,6 @@
 -- OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 -- PERFORMANCE OF THIS SOFTWARE.
 
-require "script/lobby/gizmo"
-require "script/lobby/editor"
-require "script/lobby/user"
 
 local WINDOW_POINT = vector_2:new(8.0, 64.0)
 local ACTION_RETURN = action:new(
@@ -135,8 +132,7 @@ function lobby:new(status)
 	status.system:set_texture("video/logo_b.png")
 	status.system:set_texture("video/logo_c.png")
 
-	i.grain = quiver.shader.new("asset/video/shader/base.vs", "asset/video/shader/grain.fs")
-	i.grain_location = i.grain:get_location_name("time")
+	status.system:set_shader("grain", "video/shader/base.vs", "video/shader/grain.fs")
 
 	-- collect garbage.
 	collectgarbage("collect")
@@ -169,10 +165,11 @@ function lobby:draw(status)
 			quiver.draw_2d.begin(function() self:layout_reel(status) end, self.camera_2d)
 		end)
 
-		self.grain:set_shader_decimal(self.grain_location, quiver.general.get_time())
+		local shader = status.system:get_shader("grain")
+		shader:set_shader_decimal(shader:get_location_name("time"), quiver.general.get_time())
 
 		-- begin screen-space shader.
-		self.grain:begin(function()
+		shader:begin(function()
 			local x, y = quiver.window.get_shape()
 			local render = box_2:old(0.0, 0.0, status.render.shape_x, -status.render.shape_y)
 			local window = box_2:old(0.0, 0.0, x, y)
@@ -235,7 +232,8 @@ function lobby:draw(status)
 	end)
 
 	-- begin screen-space shader.
-	status.shader:begin(function()
+	local shader = status.system:get_shader("base")
+	shader:begin(function()
 		local x, y = quiver.window.get_shape()
 		local render = box_2:old(0.0, 0.0, status.render.shape_x, -status.render.shape_y)
 		local window = box_2:old(0.0, 0.0, x, y)
@@ -394,13 +392,9 @@ function lobby:layout_mission(status)
 	-- solve an equipment collision, if any.
 	self:equip_collision(self.select_weapon, status.inner.weapon, click_a, click_b)
 
-	local list = status.system:list("level/")
-
-	for _, level in ipairs(list) do
-		if self:button(status, box_2:old(WINDOW_POINT.x, WINDOW_POINT.y + 36.0 * y, 192.0, 32.0), level) then
-			outer:new(status, level)
-		end; y = y + 1.0
-	end
+	if self:button(status, box_2:old(WINDOW_POINT.x, WINDOW_POINT.y + 36.0 * y, 192.0, 32.0), "GO!") then
+		outer:new(status)
+	end; y = y + 1.0
 end
 
 ---Layout: hunter.

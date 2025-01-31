@@ -44,7 +44,7 @@ end
 
 LOGGER_FONT_SCALE = 24.0
 LOGGER_FONT_SPACE = 1.0
-LOGGER_FONT       = quiver.font.new("asset/video/font.ttf", LOGGER_FONT_SCALE)
+LOGGER_FONT       = quiver.font.new_default()
 LOGGER_LINE_CAP   = 64.0
 
 ---@class logger

@@ -152,6 +152,13 @@ local function file_system_set_asset(self, memory_data, memory_list, call_new, f
 	return asset
 end
 
+---Get a Lua source file from the file-system table.
+---@param  faux_path string # The "faux" path to the asset, not taking into consideration the search path in which it was found.
+---@return string asset # The asset.
+function file_system:get_source(faux_path)
+	return string.sub(self.locate[faux_path], 0.0, -5.0)
+end
+
 ---Get a texture asset from the file-system model resource table.
 ---@param  faux_path string # The "faux" path to the asset, not taking into consideration the search path in which it was found.
 ---@return texture asset # The asset.
@@ -196,19 +203,51 @@ function file_system:set_sound(faux_path, force)
 end
 
 ---Get a model asset from the file-system model resource table.
----@param  faux_path string # The "faux" path to the asset, not taking into consideration the search path in which it was found.
+---@param  faux_name string # The "faux" name to the asset.
 ---@return shader asset # The asset.
-function file_system:get_shader(faux_path)
-	return self.memory_data.shader[faux_path]
+function file_system:get_shader(faux_name)
+	return self.memory_data.shader[faux_name]
 end
 
 ---Set a shader asset into the file-system model resource table.
----@param  faux_path string # The "faux" path to the asset, not taking into consideration the search path in which it was found.
+---@param  faux_name    string # The "faux" name to the asset. It will be the key for storing the asset.
+---@param  faux_path_vs string # The "faux" path to the ".vs" asset, not taking into consideration the search path in which it was found.
+---@param  faux_path_fs string # The "faux" path to the ".fs" asset, not taking into consideration the search path in which it was found.
 ---@return shader asset # The asset.
-function file_system:set_shader(faux_path, force, ...)
-	return file_system_set_asset(self, self.memory_data.shader, self.memory_list.shader, quiver.shader.new, force,
-		faux_path,
-		...)
+function file_system:set_shader(faux_name, faux_path_vs, faux_path_fs, force)
+	-- NOTE: storing a shader is slightly different from every other asset as it will
+	-- normally take in more than one path (.vs and .fs). for that reason, a specific
+	-- implementation just for the shader asset has to be made.
+
+	-- if asset was already in memory...
+	if self.memory_data.shader[faux_name] then
+		if force then
+			-- remove from the book-keeping memory table.
+			table.remove_object(self.memory_list.shader, faux_name)
+
+			-- remove from the data-keeping memory table.
+			self.memory_data.shader[faux_name] = nil
+
+			collectgarbage("collect")
+		else
+			return self.memory_data.shader[faux_name]
+		end
+	end
+
+	-- locate the asset.
+	local asset_vs = self.locate[faux_path_vs]
+	local asset_fs = self.locate[faux_path_fs]
+
+	-- create the asset.
+	asset = quiver.shader.new(asset_vs, asset_fs)
+
+	-- insert into the book-keeping memory table.
+	table.insert(self.memory_list.shader, faux_name)
+
+	-- insert into the data-keeping memory table.
+	self.memory_data.shader[faux_name] = asset
+
+	return asset
 end
 
 ---Get a model asset from the file-system model resource table.

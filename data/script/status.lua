@@ -13,10 +13,7 @@
 -- OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 -- PERFORMANCE OF THIS SOFTWARE.
 
-require "script/base/base"
-require "script/lobby/lobby"
-require "script/inner/inner"
-require "script/outer/outer"
+require "data/script/base/base"
 
 ---@class status
 ---@field active boolean
@@ -41,12 +38,35 @@ function status:new()
     i.active = true
     i.logger = logger:new()
     i.render = quiver.render_texture.new(vector_2:old(quiver.window.get_shape()) * 0.5)
-    -- TO-DO use VFS.
-    i.shader = quiver.shader.new("asset/video/shader/base.vs", "asset/video/shader/base.fs")
     i.system = file_system:new({
-        "asset"
+        "data"
     })
-    i.light = light_manager:new("asset/video/shader/light.vs", "asset/video/shader/light.fs")
+
+    -- load inner-state source code.
+    require(i.system:get_source("script/lobby/lobby.lua"))
+    require(i.system:get_source("script/lobby/gizmo.lua"))
+    require(i.system:get_source("script/lobby/editor.lua"))
+    require(i.system:get_source("script/lobby/user.lua"))
+
+    -- load inner-state source code.
+    require(i.system:get_source("script/inner/inner.lua"))
+    require(i.system:get_source("script/inner/hunter.lua"))
+    require(i.system:get_source("script/inner/weapon.lua"))
+
+    -- load outer-state source code.
+    require(i.system:get_source("script/outer/outer.lua"))
+    require(i.system:get_source("script/outer/entity.lua"))
+    require(i.system:get_source("script/outer/entry.lua"))
+    require(i.system:get_source("script/outer/actor.lua"))
+    require(i.system:get_source("script/outer/enemy.lua"))
+    require(i.system:get_source("script/outer/player.lua"))
+    require(i.system:get_source("script/outer/zombie.lua"))
+    require(i.system:get_source("script/outer/particle.lua"))
+    require(i.system:get_source("script/outer/projectile.lua"))
+
+    i.system:set_shader("base", "video/shader/base.vs", "video/shader/base.fs")
+
+    i.light = light_manager:new(i.system:set_shader("light", "video/shader/light.vs", "video/shader/light.fs"))
     i.lobby = lobby:new(i)
 
     local level_list = i.system:list("level/")
@@ -67,10 +87,8 @@ function status:new()
         end
 
         if initial then
-            print("insert as initial.")
             table.insert(i.level.initial, file)
         else
-            print("insert as regular.")
             table.insert(i.level.regular, file)
         end
     end
