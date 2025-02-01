@@ -158,7 +158,7 @@ function editor:draw_3d(status)
         local mouse = vector_2:old(quiver.input.mouse.get_point())
         local shape = vector_2:old(quiver.window.get_shape())
 
-        if quiver.collision.point_box(mouse, box_2:old(256.0 + 16.0, 64.0, shape.x, shape.y)) then
+        if quiver.collision.point_box(mouse, box_2:old(0.0, 64.0, shape.x - (256.0 + 16.0), shape.y)) then
             self:pick_entity()
             self:move_camera()
         end
@@ -403,18 +403,18 @@ function editor:layout_main_bar(status)
     quiver.draw_2d.draw_box_2_round(box_2:old(8.0, 8.0, shape.x - 16.0, 48.0), 0.25, 4.0, color:grey())
 
     -- widget panel.
-    if status.lobby:button_toggle(status, box_2:old(16.0 + (36.0 * 0.0), 16.0, 32.0, 32.0), "video/editor/point.png", not (self.widget == WIDGET_KIND.POINT)) then
+    if status.lobby:button_toggle(status, box_2:old(16.0 + (36.0 * 0.0), 16.0, 32.0, 32.0), "Point|video/editor/point.png", not (self.widget == WIDGET_KIND.POINT)) then
         self.widget = WIDGET_KIND.POINT
     end
-    if status.lobby:button_toggle(status, box_2:old(16.0 + (36.0 * 1.0), 16.0, 32.0, 32.0), "video/editor/angle.png", not (self.widget == WIDGET_KIND.ANGLE)) then
+    if status.lobby:button_toggle(status, box_2:old(16.0 + (36.0 * 1.0), 16.0, 32.0, 32.0), "Angle|video/editor/angle.png", not (self.widget == WIDGET_KIND.ANGLE)) then
         self.widget = WIDGET_KIND.ANGLE
     end
-    if status.lobby:button_toggle(status, box_2:old(16.0 + (36.0 * 2.0), 16.0, 32.0, 32.0), "video/editor/scale.png", not (self.widget == WIDGET_KIND.SCALE)) then
+    if status.lobby:button_toggle(status, box_2:old(16.0 + (36.0 * 2.0), 16.0, 32.0, 32.0), "Scale|video/editor/scale.png", not (self.widget == WIDGET_KIND.SCALE)) then
         self.widget = WIDGET_KIND.SCALE
     end
 
     -- save/load/exit/reload panel.
-    if status.lobby:button(status, box_2:old(16.0 + (36.0 * 3.0), 16.0, 32.0, 32.0), "video/editor/save.png") then
+    if status.lobby:button(status, box_2:old(16.0 + (36.0 * 3.0), 16.0, 32.0, 32.0), "Save|video/editor/save.png") then
         -- create a save table, store level file, level data.
         local save = {}
         save.file = self.file
@@ -434,14 +434,14 @@ function editor:layout_main_bar(status)
         -- serialize save file table, then save to .JSON file.
         quiver.file.set("data/level/" .. file .. ".json", quiver.general.serialize(save))
     end
-    if status.lobby:button(status, box_2:old(16.0 + (36.0 * 4.0), 16.0, 32.0, 32.0), "video/editor/load.png") then
+    if status.lobby:button(status, box_2:old(16.0 + (36.0 * 4.0), 16.0, 32.0, 32.0), "Load|video/editor/load.png") then
         status.lobby.editor = editor:new(status)
     end
-    if status.lobby:button(status, box_2:old(16.0 + (36.0 * 5.0), 16.0, 32.0, 32.0), "video/editor/exit.png") then
+    if status.lobby:button(status, box_2:old(16.0 + (36.0 * 5.0), 16.0, 32.0, 32.0), "Exit|video/editor/exit.png") then
         status.lobby.layout = 0.0
         status.lobby.editor = editor:new(status)
     end
-    if status.lobby:button(status, box_2:old(16.0 + (36.0 * 6.0), 16.0, 32.0, 32.0), "video/editor/reload.png") then
+    if status.lobby:button(status, box_2:old(16.0 + (36.0 * 6.0), 16.0, 32.0, 32.0), "Reload|video/editor/reload.png") then
         status.system:set_model(self.file, true)
     end
 
@@ -456,10 +456,10 @@ end
 ---@param status status # The game status.
 function editor:layout_side_bar(status)
     local shape = vector_2:old(quiver.window.get_shape())
-    local box = box_2:old(8.0, 64.0, 256.0, shape.y - 72.0)
+    local box = box_2:old(shape.x - (256.0 + 16.0), 64.0, 256.0, shape.y - 72.0)
     local half = self.last and (shape.y * 0.5) - 48.0 or shape.y - 88.0
-    local point_a = vector_2:old(16.0, box.y + 8.0 * 1.0 + half * 0.0)
-    local point_b = vector_2:old(16.0, box.y + 8.0 * 2.0 + half * 1.0)
+    local point_a = vector_2:old(box.x + 8.0, box.y + 8.0 * 1.0 + half * 0.0)
+    local point_b = vector_2:old(box.x + 8.0, box.y + 8.0 * 2.0 + half * 1.0)
     local box_a = box_2:old(point_a.x, point_a.y, box.width - 16.0, half)
     local box_b = box_2:old(point_b.x, point_b.y, box.width - 16.0, half)
 

@@ -67,7 +67,7 @@ function status:new()
     require(i.system:get_source("script/outer/projectile.lua"))
     require(i.system:get_source("script/outer/path.lua"))
 
-    i.system:set_shader("base", "video/shader/base.vs", "video/shader/base.fs")
+    i.system:set_shader("base", "video/shader/base.vs", "video/shader/dither.fs")
     i.system:set_shader("light", "video/shader/light.vs", "video/shader/light.fs")
 
     i.lobby = lobby:new(i)

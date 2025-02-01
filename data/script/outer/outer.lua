@@ -53,7 +53,7 @@ function outer:new(status)
 	-- make sure to enable mouse if the current device isn't a pad.
 	if not (status.lobby.window.device == INPUT_DEVICE.PAD) then
 		status.lobby.window:set_device(INPUT_DEVICE.MOUSE)
-		quiver.input.mouse.set_hidden(true)
+		quiver.input.mouse.set_active(false)
 	end
 
 	quiver.input.mouse.set_scale(vector_2:old(1.0, 1.0))
@@ -285,6 +285,13 @@ function outer:draw(status)
 				do end --self.rapier:debug_render()
 			end
 		end, self.scene.camera_3d)
+
+		-- run 3D logic for each entity.
+		for _, entity in pairs(self.entity) do
+			if entity.render then
+				entity:render(status)
+			end
+		end
 	end)
 
 	-- begin screen-space shader.

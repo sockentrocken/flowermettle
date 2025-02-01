@@ -35,6 +35,6 @@ function zombie:new(status, previous)
 end
 
 function zombie:draw_3d(status)
-	--local model = status.system:get_model("video/character.glb")
-	--model:draw(self.point - vector_3:old(0.0, 1.0, 0.0), 0.5, color:red())
+	local model = status.system:get_model("video/character.glb")
+	model:draw(self.point - vector_3:old(0.0, 1.0, 0.0), 0.5, color:red())
 end

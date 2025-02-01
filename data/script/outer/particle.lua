@@ -103,7 +103,7 @@ function particle:draw_3d(status)
 		local image = status.system:get_texture(particle.image)
 
 		-- draw particle.
-		image:draw_billboard_pro(status.outer.camera_3d, shape, self.point + point,
+		image:draw_billboard_pro(status.outer.scene.camera_3d, shape, self.point + point,
 			vector_3:y(), vector_2:one() * scale, vector_2:one() * scale * 0.5, angle, color)
 	end
 end

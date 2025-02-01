@@ -71,14 +71,14 @@ function path:frame(status)
 end
 
 function path:draw_3d(status)
-	quiver.draw_3d.draw_cube(self.point, vector_3:one(), color:red())
+	do return end
 
+	quiver.draw_3d.draw_cube(self.point, vector_3:one(), color:red())
 	for _, entity in ipairs(self.link) do
 		local link = status.outer:entity_find(status, entity)
 
 		quiver.draw_3d.draw_line(self.point, link.point, color:red())
 	end
-
 	for _, entity in ipairs(self.find) do
 		local link = status.outer:entity_find(status, entity)
 		quiver.draw_3d.draw_line(self.point, link.point, color:green())

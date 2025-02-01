@@ -51,16 +51,6 @@ function hunter:new(status)
 end
 
 function hunter:draw_3d(status)
-	-- get the player's aim in 3D space.
-	local aim = status.outer.player:aim_3d(status)
-
-	-- rotate the hunter around the player's aim.
-	aim = (math.atan2(aim.z, aim.x) * 180.0) / math.pi
-
-	-- draw hunter.
-	local model = status.system:get_model("video/character.glb")
-	model:draw_transform(status.outer.player.point - vector_3:old(0.0, 1.0, 0.0), vector_3:old(0.0, aim + 90.0, 0.0),
-		vector_3:one() * 0.5, color:blue())
 end
 
 function hunter:draw_2d(status)

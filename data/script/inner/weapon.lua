@@ -160,6 +160,7 @@ function weapon:new(status)
 	i.fire_rate    = 1.00
 	i.fire_kind    = FIRE_KIND.FULL
 	i.fire_time    = 0.00
+	i.sway         = vector_2:new(0.0, 0.0)
 
 	-- load model.
 	status.system:set_model("video/weapon/bullet.glb")
@@ -204,7 +205,7 @@ local COLOR_MUZZLE_FLASH = color:new(255.0, 90.0, 32.0, 255.0)
 
 function weapon:draw_3d(status, side)
 	-- get the player's aim in 3D space.
-	local aim = status.outer.player:aim_3d(status)
+	local aim = math.direction_from_euler(status.outer.player.angle)
 
 	-- get the cross-product between the player's aim and the up vector. invert the cross if our weapon is on the other side.
 	local cross = side == 0.0 and
@@ -221,14 +222,6 @@ function weapon:draw_3d(status, side)
 		-- draw a point light.
 		status.outer.scene.light:light_point(status.outer.player.point + cross, color)
 	end
-
-	-- rotate the weapon around the player's aim.
-	aim = (math.atan2(aim.z, aim.x) * 180.0) / math.pi
-
-	-- draw weapon.
-	local model = status.system:get_model(WEAPON_DATA[self.kind].model)
-	model:draw_transform(status.outer.player.point + cross, vector_3:old(0.0, aim + 90.0, 0.0),
-		vector_3:one(), color:red())
 end
 
 function weapon:draw_2d(status, side)
@@ -238,6 +231,59 @@ function weapon:draw_2d(status, side)
 	-- draw weapon plaque.
 	status.outer.player:draw_plaque(status, vector_2:old((shape.x - 108.0) * side, shape.y - 40.0), self.name,
 		self.ammo, self.ammo_maximum)
+end
+
+function weapon:render(status, side)
+	local player = status.outer.player
+
+	local shake = vector_3:old(
+		math.random_sign(player.camera_shake * status.lobby.user.video_shake),
+		math.random_sign(player.camera_shake * status.lobby.user.video_shake),
+		math.random_sign(player.camera_shake * status.lobby.user.video_shake)
+	) * self.miss_time * 0.5
+
+	local mouse = vector_2:old(quiver.input.mouse.get_delta())
+	local delta = quiver.general.get_frame_time()
+	self.sway.x = self.sway.x - self.sway.x * delta * 8.0
+	self.sway.y = self.sway.y - self.sway.y * delta * 8.0
+
+	self.sway.x = self.sway.x + mouse.y
+	self.sway.y = self.sway.y - mouse.x
+
+	-- begin 3D view.
+	quiver.draw_3d.begin(function()
+		local angle_x, angle_y, angle_z = math.direction_from_euler(player.angle)
+
+		local shpee = vector_3:old(player.speed.x, 0.0, player.speed.z)
+
+		local fall = (math.sin((player.fall * math.pi * 2.0) + math.pi * 0.5) - 1.0) * 0.5 * 0.5
+		local jump = (math.sin((player.jump * math.pi * 2.0) + math.pi * 0.5) - 1.0) * 0.5 * 0.5 * -1.0
+
+		fall = fall * 0.5
+		jump = jump * 0.5
+
+		local camera_walk = vector_3:old(
+			0.0,
+			math.cos(quiver.general.get_time() * 8.0) * (shpee:magnitude() / 8.0) * 0.1,
+			math.sin(quiver.general.get_time() * 4.0) * (shpee:magnitude() / 8.0) * 0.1
+		)
+
+		local angle = math.percentage_from_value(-90.0, 90.0, player.angle.y)
+		local angle = math.value_from_percentage(0.1, -0.1, angle)
+
+		local camera_move = vector_3:old(
+			-0.50 + angle - (self.fire_time / self.fire_rate) * 2.0 + (angle_x:dot(shpee) / 8.0) * 0.25 * -1.0,
+			-0.50 + angle * 2.0 + fall + jump + self.sway.x * 0.0005 +
+			math.sin(quiver.general.get_time()) * 0.025,
+			-0.00 + self.sway.y * 0.0005 + (angle_z:dot(shpee) / 8.0) * 0.25 + (side == 0.0 and -0.5 or 0.5)
+		) + shake * 0.25
+
+		-- draw weapon.
+		local model = status.system:get_model(WEAPON_DATA[self.kind].model)
+		model:draw_transform(camera_walk + camera_move, vector_3:old(0.0, 90.0, 0.0),
+			vector_3:one(),
+			color:red())
+	end, camera_3d:old(vector_3:old(-1.0, 0.0, 0.0), vector_3:zero(), vector_3:y(), 90.0, CAMERA_3D_KIND.PERSPECTIVE))
 end
 
 --[[----------------------------------------------------------------]]
@@ -257,7 +303,7 @@ end
 ---@param status status # The game status.
 ---@param side   number # The side on which the weapon is on. 0.0 for l. side, 1.0 for r. side.
 function weapon:use(status, side, input)
-	if self.ammo > 0.0 and self.fire_time == 0.0 and false then
+	if self.ammo > 0.0 and self.fire_time == 0.0 and input:down() then
 		-- get the other currently held weapon.
 		local side = side == 0.0 and
 			status.inner.weapon[status.outer.player.weapon[2]] or
@@ -267,7 +313,7 @@ function weapon:use(status, side, input)
 		local average = (side.miss_time + 1.0) * 0.1
 
 		-- get the aim of the player.
-		local aim = status.outer.player:aim(status)
+		local aim = math.direction_from_euler(status.outer.player.angle)
 
 		-- alternate inaccuracy pattern.
 		local even = math.fmod(self.ammo, 2.0) == 0.0 and 1.0 or -1.0
@@ -285,7 +331,7 @@ function weapon:use(status, side, input)
 		local i = projectile:new(status)
 
 		-- set the point, speed, and parent of the projectile.
-		i:set_point(status, status.outer.player.point)
+		i:set_point(status, status.outer.player.point + vector_3:old(0.0, 1.0, 0.0))
 		i.speed:copy(aim * WEAPON_DATA[self.kind].projectile_speed)
 		i.parent = entity_pointer:new(status.outer.player)
 

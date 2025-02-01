@@ -47,6 +47,8 @@ function player:new(status, previous)
 
 	-- TO-DO
 	i.done                  = 0.0
+	i.fall                  = 0.0
+	i.jump                  = 0.0
 
 	-- associate us as the main player.
 	status.outer.player     = i
@@ -88,21 +90,27 @@ function player:tick(status, step)
 			movement.z = quiver.input.pad.get_axis_state(0.0, 1.0)
 		else
 			-- get digital input.
-			movement.x = status.lobby.user.input_move_y_a:down() and ACTOR_SPEED_MAX * -1.0 or movement.x
-			movement.x = status.lobby.user.input_move_y_b:down() and ACTOR_SPEED_MAX or movement.x
-			movement.z = status.lobby.user.input_move_x_a:down() and ACTOR_SPEED_MAX * -1.0 or movement.z
-			movement.z = status.lobby.user.input_move_x_b:down() and ACTOR_SPEED_MAX or movement.z
+			movement.z = status.lobby.user.input_move_y_a:down() and ACTOR_SPEED_MAX or movement.z
+			movement.z = status.lobby.user.input_move_y_b:down() and ACTOR_SPEED_MAX * -1.0 or movement.z
+			movement.x = status.lobby.user.input_move_x_a:down() and ACTOR_SPEED_MAX or movement.x
+			movement.x = status.lobby.user.input_move_x_b:down() and ACTOR_SPEED_MAX * -1.0 or movement.x
 		end
 	end
 
 	local floor = self.floor
 
+	local angle_x, _, angle_z = math.direction_from_euler(vector_3:old(self.angle.x, 0.0, 0.0))
+
+	movement = movement.x * angle_x + movement.z * angle_z
+
 	self:movement(status, step, movement:normalize(), movement:magnitude())
 
 	if self.floor and not floor then
-		if self.speed.y < -16.0 then
+		if self.speed.y < -6.0 then
 			local sound = status.system:get_sound("audio/player/land_" .. math.random(1, 2) .. ".ogg")
 			sound:play()
+			self.fall = 1.0
+			self.jump = 0.0
 		end
 	end
 
@@ -143,6 +151,8 @@ function player:draw_3d(status)
 
 	-- decrement camera shake.
 	self.camera_shake    = math.max(0.0, self.camera_shake - delta * self.camera_shake * 8.0)
+	self.fall            = math.max(0.0, self.fall - delta * self.fall * 4.0)
+	self.jump            = math.max(0.0, self.jump - delta * self.jump * 4.0)
 
 	local camera_point   = nil
 
@@ -155,17 +165,35 @@ function player:draw_3d(status)
 
 	self.camera_point:copy(self.camera_point + (camera_point - status.outer.scene.camera_3d.point) * delta * CAMERA_SPEED)
 
+	local fall = (math.sin((self.fall * math.pi * 2.0) + math.pi * 0.5) - 1.0) * 0.5 * 0.5
+	local jump = (math.sin((self.jump * math.pi * 2.0) + math.pi * 0.5) - 1.0) * 0.5 * 0.5 * -1.0
+
+	local angle_x, angle_y, angle_z = math.direction_from_euler(vector_3:old(
+		self.angle.x,
+		self.angle.y - (fall * 5.0) - (jump * 5.0),
+		self.angle.z))
+
+	local shpee = vector_3:old(self.speed.x, 0.0, self.speed.z)
+
+	local camera_walk = vector_3:old(0.0, fall +
+		math.sin(quiver.general.get_time() * 8.0) * (shpee:magnitude() / 8.0) * 0.5, 0.0)
+	local camera_tilt = angle_y:rotate_axis_angle(angle_x, (angle_z:dot(shpee) / 8.0) * 0.05)
+
 	-- update the 3D camera.
-	status.outer.scene.camera_3d.point:copy(self.camera_point + shake + CAMERA_POINT)
-	status.outer.scene.camera_3d.focus:copy(self.camera_point + shake)
+	status.outer.scene.camera_3d.point:copy(self.point + shake + camera_walk +
+		vector_3:old(0.0, 1.0 + math.sin(quiver.general.get_time()) * 0.1, 0.0))
+	status.outer.scene.camera_3d.focus:copy(self.point + shake + camera_walk +
+		vector_3:old(0.0, 1.0 + math.sin(quiver.general.get_time()) * 0.1, 0.0) + angle_x)
+	status.outer.scene.camera_3d.angle:copy(camera_tilt)
 
 	-- update the 2D camera.
-	status.outer.scene.camera_2d.shift:copy(shake * 16.0)
+	status.outer.scene.camera_2d.shift:copy(shake * 32.0)
 
-	-- draw hunter, weapon.
-	hunter:draw_3d(status)
-	weapon_a:draw_3d(status, 0.0)
-	weapon_b:draw_3d(status, 1.0)
+	local mouse = vector_2:old(quiver.input.mouse.get_delta())
+	self.angle.x = self.angle.x - mouse.x * 0.1
+	self.angle.y = self.angle.y + mouse.y * 0.1
+
+	self.angle.y = math.clamp(-90.0, 90.0, self.angle.y)
 end
 
 function player:draw_2d(status)
@@ -178,9 +206,11 @@ function player:draw_2d(status)
 	local weapon_b = status.inner.weapon[self.weapon[2]]
 	local average  = (weapon_a.miss_time + weapon_b.miss_time) * 0.5
 
+	local shape    = vector_2:old(quiver.window.get_shape()):scale_zoom(status.outer.scene.camera_2d) * 0.5
+
 	-- draw crosshair.
 	local cross    = status.system:get_texture("video/cross.png")
-	cross:draw(player:aim_2d(status) - (vector_2:old(cross.shape_x, cross.shape_y) * (1.0 + average) * 0.5), 0.0,
+	cross:draw(shape - (vector_2:old(cross.shape_x, cross.shape_y) * (1.0 + average) * 0.5), 0.0,
 		1.0 + average,
 		color:white())
 
@@ -188,12 +218,15 @@ function player:draw_2d(status)
 	hunter:draw_2d(status)
 	weapon_a:draw_2d(status, 0.0)
 	weapon_b:draw_2d(status, 1.0)
+end
 
-	if quiver.input.board.get_down(INPUT_BOARD.SPACE) then
-		self.speed.y = 32.0
-	end
+function player:render(status)
+	local weapon_a = status.inner.weapon[self.weapon[1]]
+	local weapon_b = status.inner.weapon[self.weapon[2]]
 
-	quiver.draw_2d.draw_text(quiver.general.get_frame_rate(), vector_2:old(8.0, 8.0), 32.0, color:red())
+	-- draw weapon.
+	weapon_a:render(status, 0.0)
+	weapon_b:render(status, 1.0)
 end
 
 --[[----------------------------------------------------------------]]

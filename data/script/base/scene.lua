@@ -222,6 +222,16 @@ function light:new(shader)
 	return i
 end
 
+function light:set_base_color(color)
+	local location = self.shader:get_location_name("base_color")
+	self.shader:set_shader_vector_4(location, vector_4:old(
+		color.r / 255.0,
+		color.g / 255.0,
+		color.b / 255.0,
+		color.a / 255.0
+	))
+end
+
 function light:begin(call, camera_3d)
 	local location = self.shader:get_location(11)
 	self.shader:set_shader_vector_3(location, camera_3d.point)
@@ -292,9 +302,9 @@ end
 
 function light_instance:set_color(light, color)
 	light.shader:set_shader_vector_4(self.color_location, vector_4:old(
-		math.floor(color.r / 255.0),
-		math.floor(color.g / 255.0),
-		math.floor(color.b / 255.0),
-		math.floor(color.a / 255.0)
+		color.r / 255.0,
+		color.g / 255.0,
+		color.b / 255.0,
+		color.a / 255.0
 	))
 end

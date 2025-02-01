@@ -64,35 +64,61 @@ end
 ---@param wish_where vector_3 # The direction in which we want to move in.
 ---@param wish_speed number   # The magnitude in which we want to move in.
 function actor:movement(status, step, wish_where, wish_speed)
-	-- run movement logic.
-	local velocity = vector_3:old(self.speed.x, 0.0, self.speed.z)
-	local friction = velocity:magnitude()
+	if self.floor then
+		-- run movement logic.
+		local velocity = vector_3:old(self.speed.x, 0.0, self.speed.z)
+		local friction = velocity:magnitude()
 
-	if friction > 0.0 then
-		if friction < ACTOR_SPEED_MIN then
-			friction = 1.0 - step * (ACTOR_SPEED_MIN / friction) * ACTOR_FRICTION
-		else
-			friction = 1.0 - step * ACTOR_FRICTION
+		if friction > 0.0 then
+			if friction < ACTOR_SPEED_MIN then
+				friction = 1.0 - step * (ACTOR_SPEED_MIN / friction) * ACTOR_FRICTION
+			else
+				friction = 1.0 - step * ACTOR_FRICTION
+			end
+
+			if friction < 0.0 then
+				self.speed:copy(vector_3:zero())
+			else
+				self.speed.x = self.speed.x * friction
+				self.speed.z = self.speed.z * friction
+			end
 		end
 
-		if friction < 0.0 then
-			self.speed:copy(vector_3:zero())
-		else
-			self.speed.x = self.speed.x * friction
-			self.speed.z = self.speed.z * friction
+		friction = wish_speed - self.speed:dot(wish_where)
+
+		if friction > 0.0 then
+			self.speed:copy(self.speed + wish_where * math.min(friction, ACTOR_VELOCITY * step * wish_speed))
 		end
-	end
+	else
+		local friction = 0.0
 
-	friction = wish_speed - self.speed:dot(wish_where)
+		local ACTOR_AIR_VELOCITY = 2048.0
+		local ACTOR_AIR_THRESHOLD = 1.0 -- originally 30.0
 
-	if friction > 0.0 then
-		self.speed:copy(self.speed + wish_where * math.min(friction, ACTOR_VELOCITY * step * wish_speed))
+		self.speed.y = self.speed.y - (ACTOR_GRAVITY * step)
+
+		if wish_speed < ACTOR_AIR_THRESHOLD then
+			friction = wish_speed - self.speed:dot(wish_where)
+		else
+			friction = ACTOR_AIR_THRESHOLD - self.speed:dot(wish_where)
+		end
+
+		if friction > 0.0 then
+			self.speed:copy(self.speed + wish_where * math.min(friction, ACTOR_AIR_VELOCITY * wish_speed * step))
+		end
 	end
 
 	--[[]]
 
-	-- if actor was on floor on the previous frame, bind vertical speed to 0. otherwise, decrease speed.
-	self.speed.y = self.floor and 0.0 or self.speed.y - step * ACTOR_GRAVITY
+	if self.floor then
+		self.speed.y = 0.0
+
+		if quiver.input.board.get_down(INPUT_BOARD.SPACE) then
+			self.speed.y = 8.0
+			self.jump = 1.0
+			self.fall = 0.0
+		end
+	end
 
 	-- if actor was on floor on the previous frame, add epsilon to verify we are still on floor. otherwise, use regular vertical speed.
 	local check = self.floor and self.speed + ACTOR_FLOOR_HELPER or self.speed
@@ -114,7 +140,7 @@ function actor:hurt(status, source, damage)
 	self.speed:copy(self.speed + (self.point - source.point):normalize() * damage * 0.25)
 
 	-- spawn blood particle.
-	particle:new(status, nil, source.point, source.point - self.point, 1.0, vector_3:old(1.0, 0.0, 1.0), "blood")
+	particle:new(status, nil, self.point, source.point - self.point, 1.0, vector_3:old(1.0, 0.0, 0.0), "blood")
 
 	-- decrement health.
 	self.health = self.health - damage
