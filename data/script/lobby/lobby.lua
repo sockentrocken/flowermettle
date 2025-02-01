@@ -97,13 +97,11 @@ function lobby:new(status)
 	--[[]]
 
 	i.__type        = "lobby"
+	i.scene         = scene:new(status.system:get_shader("light"))
 	i.active        = true
 	i.editor        = editor:new(status)
 	i.window        = window:new()
 	i.user          = user:new(status)
-	i.camera_3d     = camera_3d:new(vector_3:new(8.0, 2.5, 0.0), vector_3:new(0.0, 2.0, 0.0), vector_3:new(0.0, 1.0, 0.0),
-		45.0, CAMERA_3D_KIND.PERSPECTIVE)
-	i.camera_2d     = camera_2d:new(vector_2:new(0.0, 0.0), vector_2:new(0.0, 0.0), 0.0, 1.0)
 	i.layout        = LOBBY_LAYOUT.MAIN
 	-- to-do fix snap.
 	i.ease_point    = vector_3:new(6.00, 2.5, 4.0)
@@ -117,7 +115,7 @@ function lobby:new(status)
 	i.scroll_frame  = 0.0
 
 	-- load model.
-	status.system:set_model("video/menu.glb"):bind_shader(1.0, status.light.shader)
+	status.system:set_model("video/menu.glb"):bind_shader(1.0, i.scene.light.shader)
 
 	-- load sound.
 	status.system:set_sound("audio/interface/hover.ogg")
@@ -134,6 +132,8 @@ function lobby:new(status)
 
 	status.system:set_shader("grain", "video/shader/base.vs", "video/shader/grain.fs")
 
+	i.scene.camera_3d.zoom = 45.0
+
 	-- collect garbage.
 	collectgarbage("collect")
 
@@ -147,10 +147,10 @@ local REEL_TIME = 22.5
 ---@param status status # The game status.
 function lobby:draw(status)
 	--local shape = vector_2:old(quiver.window.get_shape())
-	--self.camera_2d.zoom = math.clamp(0.25, 4.0, math.snap(0.25, shape.y / 640.0))
+	--self.scene.camera_2d.zoom = math.clamp(0.25, 4.0, math.snap(0.25, shape.y / 640.0))
 
 	--if quiver.window.get_resize() then
-	--	quiver.input.mouse.set_scale(vector_2:old(1.0 / self.camera_2d.zoom, 1.0 / self.camera_2d.zoom))
+	--	quiver.input.mouse.set_scale(vector_2:old(1.0 / self.scene.camera_2d.zoom, 1.0 / self.scene.camera_2d.zoom))
 	--end
 
 	local delta = quiver.general.get_frame_time()
@@ -162,7 +162,7 @@ function lobby:draw(status)
 		-- draw 2D view.
 		status.render:begin(function()
 			quiver.draw.clear(color:black())
-			quiver.draw_2d.begin(function() self:layout_reel(status) end, self.camera_2d)
+			quiver.draw_2d.begin(function() self:layout_reel(status) end, self.scene.camera_2d)
 		end)
 
 		local shader = status.system:get_shader("grain")
@@ -195,7 +195,7 @@ function lobby:draw(status)
 
 		-- draw 3D view.
 		quiver.draw_3d.begin(function()
-			status.light:begin(nil, self.camera_3d)
+			self.scene.light:begin(nil, self.scene.camera_3d)
 
 			--status.light:static_light(vector_3:old(0.0, 2.0, 4.0), vector_3:zero(), color:red())
 
@@ -206,12 +206,12 @@ function lobby:draw(status)
 			local focus = LOBBY_LAYOUT_CAMERA[self.layout].focus
 
 			-- interpolate to ease point/focus.
-			self.ease_point:copy(self.ease_point + (point - self.camera_3d.point) * delta * 8.0)
-			self.ease_focus:copy(self.ease_focus + (focus - self.camera_3d.focus) * delta * 8.0)
+			self.ease_point:copy(self.ease_point + (point - self.scene.camera_3d.point) * delta * 8.0)
+			self.ease_focus:copy(self.ease_focus + (focus - self.scene.camera_3d.focus) * delta * 8.0)
 
 			-- update camera.
-			self.camera_3d.point:copy(self.ease_point)
-			self.camera_3d.focus:copy(self.ease_focus)
+			self.scene.camera_3d.point:copy(self.ease_point)
+			self.scene.camera_3d.focus:copy(self.ease_focus)
 
 			-- draw menu model.
 			local model = status.system:get_model("video/menu.glb")
@@ -228,7 +228,7 @@ function lobby:draw(status)
 				weapon_a:draw_lobby(status, 0.0)
 				weapon_b:draw_lobby(status, 1.0)
 			end
-		end, self.camera_3d)
+		end, self.scene.camera_3d)
 	end)
 
 	-- begin screen-space shader.
@@ -264,7 +264,7 @@ function lobby:draw(status)
 
 		-- close window.
 		self.window:close(not self.active)
-	end, self.camera_2d)
+	end, self.scene.camera_2d)
 end
 
 --[[----------------------------------------------------------------]]
@@ -511,7 +511,7 @@ function lobby:layout_configuration(status)
 		self.user = user:default(status)
 	end; y = y + 1.0
 
-	local shape = vector_2:old(quiver.window.get_shape()):scale_zoom(self.camera_2d)
+	local shape = vector_2:old(quiver.window.get_shape()):scale_zoom(self.scene.camera_2d)
 
 	self.scroll_value, self.scroll_frame = self:scroll(status,
 		box_2:old(WINDOW_POINT.x, WINDOW_POINT.y + 36.0 * y, 512.0 + 160.0, shape.y - (WINDOW_POINT.y + 36.0 * y) - 64.0),
@@ -632,6 +632,8 @@ end
 ---@param click
 function lobby:get_gizmo(status, label, hover, index, focus, click)
 	local delta = quiver.general.get_frame_time()
+
+	label = label .. status.lobby.window.count
 
 	if not self.data[label] then
 		self.data[label] = gizmo:new()
@@ -842,6 +844,45 @@ end
 ---@return boolean click # True on click, false otherwise.
 function lobby:slider(status, shape, label, value, min, max, step, flag)
 	return status.lobby.window:slider(shape, label, value, min, max, step, flag, slider_call_back,
+		status)
+end
+
+-- TO-DO parameter description
+---@param status status
+---@param window window
+---@param shape  vector_2
+---@param hover  boolean
+---@param index  boolean
+---@param focus  boolean
+---@param label  string
+---@param value  number
+local function spinner_call_back(status, window, shape, hover, index, focus, label, value)
+	local gizmo = status.lobby:get_gizmo(status, label, hover, index, focus)
+	local shape = gizmo:move(status.lobby, shape)
+	local color = gizmo:fade(status.lobby, color:white())
+
+	-- draw border.
+	quiver.draw_2d.draw_box_2_round(shape, 0.25, 4.0, color * 0.5)
+
+	local font = status.system:get_font("video/font_side.ttf")
+	font:draw(label, vector_2:old(shape.x + shape.width + 4.0, shape.y + shape.height * 0.5 - 12.0), 24.0, 1.0, color)
+
+	-- measure text.
+	local measure = font:measure_text(value, 24.0, 1.0)
+
+	-- draw value.
+	font:draw(value, vector_2:old(shape.x + (shape.width * 0.5) - (measure * 0.5), shape.y + 4.0),
+		24.0,
+		1.0,
+		color:black())
+
+	if hover or index then
+		do end
+	end
+end
+
+function lobby:spinner(status, shape, label, value, min, max, flag)
+	return status.lobby.window:spinner(shape, label, value, min, max, GIZMO_FLAG.CLICK_ON_PRESS, spinner_call_back,
 		status)
 end
 

@@ -516,7 +516,7 @@ function window:slider(shape, label, value, min, max, step, flag, call_back, cal
 
 	if window_check_draw(self, shape) then
 		-- get the percentage of the value within the minimum/maximum range.
-		local percentage = math.percentage_from_value(min, max, value)
+		local percentage = math.clamp(0.0, 1.0, math.percentage_from_value(min, max, value))
 
 		if call_back then
 			call_back(call_data, self, shape, hover, index, focus, label, value, percentage)
@@ -532,6 +532,62 @@ function window:slider(shape, label, value, min, max, step, flag, call_back, cal
 					false,
 					BORDER_COLOR_D)
 			end
+
+			-- measure text.
+			local measure = LOGGER_FONT:measure_text(value, LOGGER_FONT_SCALE, LOGGER_FONT_SPACE)
+
+			-- draw value.
+			LOGGER_FONT:draw(value, vector_2:old(shape.x + (shape.width * 0.5) - (measure * 0.5), shape.y + 4.0),
+				LOGGER_FONT_SCALE,
+				LOGGER_FONT_SPACE,
+				color:white())
+		end
+	end
+
+	-- return value, and click.
+	return value, click
+end
+
+---Draw a spinner gizmo.
+---@param shape box_2      # The shape of the gizmo.
+---@param label string     # The label of the gizmo.
+---@param value number     # The value of the gizmo.
+---@param min?  number     # OPTIONAL: The minimum value of the gizmo.
+---@param max?  number     # OPTIONAL: The minimum value of the gizmo.
+---@param flag? gizmo_flag # OPTIONAL: The flag of the gizmo.
+---@return number  value # The value.
+---@return boolean click # True on click, false otherwise.
+function window:spinner(shape, label, value, min, max, flag, call_back, call_data)
+	-- scroll.
+	shape.y = shape.y + self.point
+
+	-- get the state of this gizmo.
+	local hover, index, focus, click, which = window_state(self, shape, flag, WINDOW_ACTION_LATERAL)
+
+	-- if there has been input at all...
+	if which then
+		-- get the actual button.
+		which = WINDOW_ACTION_LATERAL.list[which]
+
+		if which.button == INPUT_BOARD.A or which.button == INPUT_MOUSE.LEFT or which.button == INPUT_PAD.LEFT_FACE_LEFT then
+			-- decrease value.
+			value = value - 1.0
+		else
+			-- increase value.
+			value = value + 1.0
+		end
+
+		if min and max then
+			value = math.clamp(min, max, value)
+		end
+	end
+
+	if window_check_draw(self, shape) then
+		if call_back then
+			call_back(call_data, self, shape, hover, index, focus, label, value)
+		else
+			-- draw a border, with a text off-set.
+			window_border(self, shape, hover, index, focus, label, vector_2:old(shape.width, 0.0))
 
 			-- measure text.
 			local measure = LOGGER_FONT:measure_text(value, LOGGER_FONT_SCALE, LOGGER_FONT_SPACE)

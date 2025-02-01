@@ -48,14 +48,38 @@ local ENTITY_LIST = {
             )
         }
     },
-    door = {
+    entry = {
         data = {
+            entry_source = 0.0
         },
         help = {
             box = box_3:new(
                 vector_3:new(-0.5, -0.5, -0.5),
                 vector_3:new(0.5, 0.5, 0.5)
             )
+        }
+    },
+    path = {
+        data = {
+            source = 0.0,
+            target = 0.0,
+            entry  = 0.0
+        },
+        help = {
+            box = box_3:new(
+                vector_3:new(-0.5, -0.5, -0.5),
+                vector_3:new(0.5, 0.5, 0.5)
+            ),
+            link = {
+                target = {
+                    where = "source",
+                    color = color:new(255.0, 0.0, 0.0, 255.0)
+                },
+                entry = {
+                    where = "entry_source",
+                    color = color:new(0.0, 255.0, 0.0, 255.0)
+                },
+            }
         }
     }
 }
@@ -96,7 +120,7 @@ function editor:new(status)
     i.snap      = 0.5
 
     -- wire-frame view.
-    i.wire      = true
+    i.wire      = false
 
     -- scroll cache for create/re-load level, respectively.
     i.scroll    = { { 0.0, 0.0 }, { 0.0, 0.0 } }
@@ -131,8 +155,13 @@ end
 function editor:draw_3d(status)
     -- if there is a currently acitve file...
     if self.file then
-        self:pick_entity()
-        self:move_camera()
+        local mouse = vector_2:old(quiver.input.mouse.get_point())
+        local shape = vector_2:old(quiver.window.get_shape())
+
+        if quiver.collision.point_box(mouse, box_2:old(256.0 + 16.0, 64.0, shape.x, shape.y)) then
+            self:pick_entity()
+            self:move_camera()
+        end
 
         -- adjust snap count.
         if quiver.input.board.get_down(INPUT_BOARD.L_CONTROL) then
@@ -174,7 +203,7 @@ function editor:draw_2d(status)
         -- for every entity in the entity list...
         for _, entity in ipairs(self.entity) do
             -- run draw 2D logic for entity.
-            self:draw_entity_2d(entity)
+            self:draw_entity_2d(status, entity)
         end
 
         -- draw main and side panel.
@@ -201,62 +230,60 @@ function editor:pick_entity()
     -- if the l. mouse button was set off...
     if quiver.input.mouse.get_press(INPUT_MOUSE.LEFT) then
         -- get the mouse's point, screen shape.
-        local mouse = vector_2:old(quiver.input.mouse.get_point())
-        local shape = vector_2:old(quiver.window.get_shape())
+        local mouse     = vector_2:old(quiver.input.mouse.get_point())
+        local shape     = vector_2:old(quiver.window.get_shape())
 
-        if quiver.collision.point_box(mouse, box_2:old(256.0 + 16.0, 64.0, shape.x, shape.y)) then
-            local hit_which = nil
-            local hit_where = math.huge
+        local hit_which = nil
+        local hit_where = math.huge
 
-            -- get a ray from the camera.
-            local hit_ray   = ray:old(vector_3:zero(), vector_3:zero())
-            hit_ray:pack(quiver.draw_3d.get_screen_to_world(self.camera_3d, mouse, shape))
+        -- get a ray from the camera.
+        local hit_ray   = ray:old(vector_3:zero(), vector_3:zero())
+        hit_ray:pack(quiver.draw_3d.get_screen_to_world(self.camera_3d, mouse, shape))
 
-            for i, entity in ipairs(self.entity) do
-                local locate = ENTITY_LIST[entity.__help.locate]
-                local collision = quiver.collision.ray_box(hit_ray,
-                    locate.help.box
-                    :scale(entity.scale)
-                    :point(entity.point)
-                )
+        for i, entity in ipairs(self.entity) do
+            local locate = ENTITY_LIST[entity.__help.locate]
+            local collision = quiver.collision.ray_box(hit_ray,
+                locate.help.box
+                :scale(entity.scale)
+                :point(entity.point)
+            )
 
-                -- if ray hit entity...
-                if collision.hit then
-                    -- if the distance to the hit is bigger than the previous hit...
-                    if hit_where > collision.distance then
-                        -- store collision.
-                        hit_which = i
-                        hit_where = collision.distance
-                    end
+            -- if ray hit entity...
+            if collision.hit then
+                -- if the distance to the hit is bigger than the previous hit...
+                if hit_where > collision.distance then
+                    -- store collision.
+                    hit_which = i
+                    hit_where = collision.distance
                 end
             end
+        end
 
-            -- if there has been a collision with the ray...
-            if hit_which then
-                -- get the entity.
-                local entity = self.entity[hit_which]
+        -- if there has been a collision with the ray...
+        if hit_which then
+            -- get the entity.
+            local entity = self.entity[hit_which]
 
-                -- if the l. shift key is not held down, mark every entity as in-active.
-                if not quiver.input.board.get_down(INPUT_BOARD.L_SHIFT) then
-                    for _, entity in pairs(self.entity) do
-                        entity.__help.active = false
-                    end
-                end
-
-                -- mark hit entity as active.
-                entity.__help.active = true
-
-                -- mark as last entity pick.
-                self.last = hit_which
-            else
-                -- mark every entity as in-active.
+            -- if the l. shift key is not held down, mark every entity as in-active.
+            if not quiver.input.board.get_down(INPUT_BOARD.L_SHIFT) then
                 for _, entity in pairs(self.entity) do
                     entity.__help.active = false
                 end
-
-                -- remove last entity pick.
-                self.last = nil
             end
+
+            -- mark hit entity as active.
+            entity.__help.active = true
+
+            -- mark as last entity pick.
+            self.last = hit_which
+        else
+            -- mark every entity as in-active.
+            for _, entity in pairs(self.entity) do
+                entity.__help.active = false
+            end
+
+            -- remove last entity pick.
+            self.last = nil
         end
     end
 end
@@ -307,8 +334,8 @@ function editor:layout_select(status)
 
     --[[]]
 
-    status.lobby.window:text(point_a, "Create Map", LOGGER_FONT, LOGGER_FONT_SCALE,
-        LOGGER_FONT_SPACE, color:white())
+    status.lobby.window:text(point_a, "Create Map", status.system:get_font("video/font_side.ttf"), 24.0, 1.0,
+        color:white())
 
     quiver.draw_2d.draw_box_2_round(box_a, 0.25, 4.0, color:grey())
 
@@ -330,8 +357,8 @@ function editor:layout_select(status)
 
     --[[]]
 
-    status.lobby.window:text(point_b, "Reload Map", LOGGER_FONT, LOGGER_FONT_SCALE,
-        LOGGER_FONT_SPACE, color:white())
+    status.lobby.window:text(point_b, "Reload Map", status.system:get_font("video/font_side.ttf"), 24.0,
+        1.0, color:white())
 
     quiver.draw_2d.draw_box_2_round(box_b, 0.25, 4.0, color:grey())
 
@@ -339,7 +366,7 @@ function editor:layout_select(status)
         function()
             for i, value in ipairs(status.system:list("level/")) do
                 if status.lobby:button(status, box_2:old(box_b.x + 8.0, box_b.y + 8.0 + (40.0 * (i - 1.0)), 320.0, 32.0), value) then
-                    local data = quiver.file.get("asset/" .. value)
+                    local data = quiver.file.get("data/" .. value)
                     local data = quiver.general.deserialize(data)
 
                     for _, entity in ipairs(data.data) do
@@ -405,7 +432,7 @@ function editor:layout_main_bar(status)
         file = string.tokenize(file, "([^.]+)")[1]
 
         -- serialize save file table, then save to .JSON file.
-        quiver.file.set("asset/level/" .. file .. ".json", quiver.general.serialize(save))
+        quiver.file.set("data/level/" .. file .. ".json", quiver.general.serialize(save))
     end
     if status.lobby:button(status, box_2:old(16.0 + (36.0 * 4.0), 16.0, 32.0, 32.0), "video/editor/load.png") then
         status.lobby.editor = editor:new(status)
@@ -484,7 +511,7 @@ function editor:layout_side_bar(status)
                     if type(value) == "number" then
                         local box = box_2:old(box_b.x + 4.0, box_b.y + 4.0 + (36.0 * i), box_b.width * 0.5, 32.0)
 
-                        entity[name] = status.lobby:slider(status, box, name, value, 0.0, 1.0, 0.1)
+                        entity[name] = status.lobby:spinner(status, box, name, value)
 
                         i = i + 1.0
                     elseif type(value) == "boolean" then
@@ -637,6 +664,16 @@ function editor:entity_draw_3d(entity)
             end
         end
 
+        if locate.help.link then
+            for target, data in pairs(locate.help.link) do
+                for _, value in ipairs(self.entity) do
+                    if value[data.where] == entity[target] then
+                        quiver.draw_3d.draw_line(entity.point, value.point, data.color)
+                    end
+                end
+            end
+        end
+
         -- draw angle help.
         local x, y, z = math.direction_from_euler(entity.angle)
         x = entity.point + x * 2.0
@@ -658,7 +695,7 @@ end
 
 ---2D draw logic for a given entity.
 ---@param entity table  # The entity.
-function editor:draw_entity_2d(entity)
+function editor:draw_entity_2d(status, entity)
     local point  = vector_2:old(0.0, 0.0)
     local shape  = vector_2:old(quiver.window.get_shape())
     local locate = ENTITY_LIST[entity.__help.locate]
@@ -666,7 +703,8 @@ function editor:draw_entity_2d(entity)
     --[[]]
 
     -- measure the name of the entity.
-    local x = LOGGER_FONT:measure_text(entity.__help.locate, LOGGER_FONT_SCALE, LOGGER_FONT_SPACE)
+    local x = status.system:get_font("video/font_side.ttf"):measure_text(entity.__help.locate, 24.0,
+        1.0)
     x       = x * 0.5
 
     -- get the 2D screen position for the 3D world position of the name.
@@ -677,6 +715,6 @@ function editor:draw_entity_2d(entity)
     point.x = point.x - x
 
     -- draw text.
-    LOGGER_FONT:draw(entity.__help.locate, point, LOGGER_FONT_SCALE, LOGGER_FONT_SPACE,
+    status.system:get_font("video/font_side.ttf"):draw(entity.__help.locate, point, 24.0, 1.0,
         entity.__help.active and color:green() or color:red())
 end

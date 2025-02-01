@@ -42,14 +42,14 @@ end
 
 --[[----------------------------------------------------------------]]
 
-LOGGER_FONT_SCALE = 24.0
-LOGGER_FONT_SPACE = 1.0
-LOGGER_FONT       = quiver.font.new_default()
-LOGGER_LINE_CAP   = 64.0
+local LOGGER_FONT_SCALE = 24.0
+local LOGGER_FONT_SPACE = 2.0
+local LOGGER_FONT       = quiver.font.new_default()
+local LOGGER_LINE_CAP   = 64.0
 
 ---@class logger
 ---@field buffer  table
-logger            = {
+logger                  = {
 	__meta = {}
 }
 

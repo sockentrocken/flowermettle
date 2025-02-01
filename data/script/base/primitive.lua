@@ -16,6 +16,7 @@
 local POOL_VECTOR_2_AMOUNT  = 1024
 local POOL_VECTOR_3_AMOUNT  = 1024
 local POOL_VECTOR_4_AMOUNT  = 1024
+local POOL_MATRIX_AMOUNT    = 1024
 local POOL_CAMERA_2D_AMOUNT = 4
 local POOL_CAMERA_3D_AMOUNT = 4
 local POOL_COLOR_AMOUNT     = 1024
@@ -243,6 +244,7 @@ function vector_3:set(x, y, z)
 	self.x = x
 	self.y = y
 	self.z = z
+	return self
 end
 
 ---Create a new, GC-vector from an old table-pool vector.
@@ -263,6 +265,7 @@ function vector_3:copy(value)
 	self.x = value.x
 	self.y = value.y
 	self.z = value.z
+	return self
 end
 
 ---Get the "X" vector.
@@ -579,6 +582,117 @@ function vector_4:from_euler(pitch, yaw, roll)
 end
 
 vector_4_pool = table_pool:new(vector_4, POOL_VECTOR_4_AMOUNT)
+
+--[[----------------------------------------------------------------]]
+
+---@class matrix
+---@field m0  number
+---@field m1  number
+---@field m2  number
+---@field m3  number
+---@field m4  number
+---@field m5  number
+---@field m6  number
+---@field m7  number
+---@field m8  number
+---@field m9  number
+---@field m10 number
+---@field m11 number
+---@field m12 number
+---@field m13 number
+---@field m14 number
+---@field m15 number
+matrix = {
+	__meta = {}
+}
+
+function matrix:new(m0, m1, m2, m3,
+					m4, m5, m6, m7,
+					m8, m9, m10, m11,
+					m12, m13, m14, m15)
+	local i = {}
+	setmetatable(i, self.__meta)
+	getmetatable(i).__index = self
+
+	--[[]]
+
+	i.__type = "matrix"
+	i.m0 = m0
+	i.m1 = m1
+	i.m2 = m2
+	i.m3 = m3
+	i.m4 = m4
+	i.m5 = m5
+	i.m6 = m6
+	i.m7 = m7
+	i.m8 = m8
+	i.m9 = m9
+	i.m10 = m10
+	i.m11 = m11
+	i.m12 = m12
+	i.m13 = m13
+	i.m14 = m14
+	i.m15 = m15
+
+	return i
+end
+
+function matrix:default()
+	return matrix:new(
+		0.0, 0.0, 0.0, 0.0,
+		0.0, 0.0, 0.0, 0.0,
+		0.0, 0.0, 0.0, 0.0,
+		0.0, 0.0, 0.0, 0.0
+	)
+end
+
+function matrix:old(m0, m1, m2, m3,
+					m4, m5, m6, m7,
+					m8, m9, m10, m11,
+					m12, m13, m14, m15)
+	local i = matrix_pool:get()
+	i.m0 = m0
+	i.m1 = m1
+	i.m2 = m2
+	i.m3 = m3
+	i.m4 = m4
+	i.m5 = m5
+	i.m6 = m6
+	i.m7 = m7
+	i.m8 = m8
+	i.m9 = m9
+	i.m10 = m10
+	i.m11 = m11
+	i.m12 = m12
+	i.m13 = m13
+	i.m14 = m14
+	i.m15 = m15
+	return i
+end
+
+function matrix:set(m0, m1, m2, m3,
+					m4, m5, m6, m7,
+					m8, m9, m10, m11,
+					m12, m13, m14, m15)
+	self.m0 = m0
+	self.m1 = m1
+	self.m2 = m2
+	self.m3 = m3
+	self.m4 = m4
+	self.m5 = m5
+	self.m6 = m6
+	self.m7 = m7
+	self.m8 = m8
+	self.m9 = m9
+	self.m10 = m10
+	self.m11 = m11
+	self.m12 = m12
+	self.m13 = m13
+	self.m14 = m14
+	self.m15 = m15
+end
+
+matrix_pool = table_pool:new(matrix, POOL_MATRIX_AMOUNT)
 
 --[[----------------------------------------------------------------]]
 

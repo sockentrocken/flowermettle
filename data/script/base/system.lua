@@ -13,18 +13,18 @@
 -- OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 -- PERFORMANCE OF THIS SOFTWARE.
 
----@class file_system
+---@class system
 ---@field search      table
 ---@field locate      table
 ---@field memory_list table
 ---@field memory_data table
-file_system = {
+system = {
 	__meta = {}
 }
 
 ---Create a new virtual file-system. For serialization, you may want to only serialize "search", "locate", and "memory_list", which only contain serializable data.
 ---```lua
----local i = file_system:new({
+---local i = system:new({
 ---    "game_folder_1", -- image.png, sound.wav, model.obj
 ---    "game_folder_2", -- image.png
 ---    "game_folder_3"  -- sound.wav
@@ -37,15 +37,15 @@ file_system = {
 ---i:find("sound.wav") -- "game_folder_3/sound.wav"
 ---i:find("model.obj") -- "game_folder_1/model.obj"
 ---```
----@return file_system value # The virtual file-system.
-function file_system:new(search)
+---@return system value # The virtual file-system.
+function system:new(search)
 	local i = {}
 	setmetatable(i, self.__meta)
 	getmetatable(i).__index = self
 
 	--[[]]
 
-	i.__type = "file_system"
+	i.__type = "system"
 	i.locate = {}
 	i.memory_list = {
 		texture = {},
@@ -70,7 +70,7 @@ function file_system:new(search)
 end
 
 ---Scan every directory in the asset's search table, to update the asset look-up table.
-function file_system:scan(search)
+function system:scan(search)
 	-- get the info path (i.e. path: "main_folder").
 	local _, path = quiver.general.get_info()
 
@@ -92,7 +92,7 @@ function file_system:scan(search)
 	end
 end
 
-function file_system:list(search)
+function system:list(search)
 	local result = {}
 
 	for path, _ in pairs(self.locate) do
@@ -107,12 +107,12 @@ end
 ---Find an asset by name, to get the full path of the asset.
 ---@param  faux_path string # The "faux" path to the asset, not taking into consideration the search path in which it was found.
 ---@return string full_path # The "full" path to the asset.
-function file_system:find(faux_path)
+function system:find(faux_path)
 	return self.locate[faux_path]
 end
 
 ---Re-load every asset in memory.
-function file_system:load()
+function system:load()
 	for path, _ in pairs(self.memory_data.texture) do
 		self:set_texture(path, true)
 	end
@@ -155,21 +155,21 @@ end
 ---Get a Lua source file from the file-system table.
 ---@param  faux_path string # The "faux" path to the asset, not taking into consideration the search path in which it was found.
 ---@return string asset # The asset.
-function file_system:get_source(faux_path)
+function system:get_source(faux_path)
 	return string.sub(self.locate[faux_path], 0.0, -5.0)
 end
 
 ---Get a texture asset from the file-system model resource table.
 ---@param  faux_path string # The "faux" path to the asset, not taking into consideration the search path in which it was found.
 ---@return texture asset # The asset.
-function file_system:get_texture(faux_path)
+function system:get_texture(faux_path)
 	return self.memory_data.texture[faux_path]
 end
 
 ---Set a texture asset into the file-system model resource table.
 ---@param  faux_path string # The "faux" path to the asset, not taking into consideration the search path in which it was found.
 ---@return texture asset # The asset.
-function file_system:set_texture(faux_path, force)
+function system:set_texture(faux_path, force)
 	return file_system_set_asset(self, self.memory_data.texture, self.memory_list.texture, quiver.texture.new, force,
 		faux_path)
 end
@@ -177,35 +177,35 @@ end
 ---Get a model asset from the file-system model resource table.
 ---@param  faux_path string # The "faux" path to the asset, not taking into consideration the search path in which it was found.
 ---@return model asset # The asset.
-function file_system:get_model(faux_path)
+function system:get_model(faux_path)
 	return self.memory_data.model[faux_path]
 end
 
 ---Set a model asset into the file-system model resource table.
 ---@param  faux_path string # The "faux" path to the asset, not taking into consideration the search path in which it was found.
 ---@return model asset # The asset.
-function file_system:set_model(faux_path, force)
+function system:set_model(faux_path, force)
 	return file_system_set_asset(self, self.memory_data.model, self.memory_list.model, quiver.model.new, force, faux_path)
 end
 
 ---Get a sound asset from the file-system sound resource table.
 ---@param  faux_path string # The "faux" path to the asset, not taking into consideration the search path in which it was found.
 ---@return sound asset # The asset.
-function file_system:get_sound(faux_path)
+function system:get_sound(faux_path)
 	return self.memory_data.sound[faux_path]
 end
 
 ---Set a sound asset into the file-system sound resource table.
 ---@param  faux_path string # The "faux" path to the asset, not taking into consideration the search path in which it was found.
 ---@return sound asset # The asset.
-function file_system:set_sound(faux_path, force)
+function system:set_sound(faux_path, force)
 	return file_system_set_asset(self, self.memory_data.sound, self.memory_list.sound, quiver.sound.new, force, faux_path)
 end
 
 ---Get a model asset from the file-system model resource table.
 ---@param  faux_name string # The "faux" name to the asset.
 ---@return shader asset # The asset.
-function file_system:get_shader(faux_name)
+function system:get_shader(faux_name)
 	return self.memory_data.shader[faux_name]
 end
 
@@ -214,7 +214,7 @@ end
 ---@param  faux_path_vs string # The "faux" path to the ".vs" asset, not taking into consideration the search path in which it was found.
 ---@param  faux_path_fs string # The "faux" path to the ".fs" asset, not taking into consideration the search path in which it was found.
 ---@return shader asset # The asset.
-function file_system:set_shader(faux_name, faux_path_vs, faux_path_fs, force)
+function system:set_shader(faux_name, faux_path_vs, faux_path_fs, force)
 	-- NOTE: storing a shader is slightly different from every other asset as it will
 	-- normally take in more than one path (.vs and .fs). for that reason, a specific
 	-- implementation just for the shader asset has to be made.
@@ -253,14 +253,14 @@ end
 ---Get a model asset from the file-system model resource table.
 ---@param  faux_path string # The "faux" path to the asset, not taking into consideration the search path in which it was found.
 ---@return font asset # The asset.
-function file_system:get_font(faux_path)
+function system:get_font(faux_path)
 	return self.memory_data.font[faux_path]
 end
 
 ---Set a font asset into the file-system model resource table.
 ---@param  faux_path string # The "faux" path to the asset, not taking into consideration the search path in which it was found.
 ---@return font asset # The asset.
-function file_system:set_font(faux_path, force, ...)
+function system:set_font(faux_path, force, ...)
 	return file_system_set_asset(self, self.memory_data.font, self.memory_list.font, quiver.font.new, force, faux_path,
 		...)
 end

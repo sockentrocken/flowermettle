@@ -52,7 +52,7 @@ function player:new(status, previous)
 	status.outer.player     = i
 
 	-- load model.
-	status.system:set_model("video/character.glb"):bind_shader(0.0, status.light.shader)
+	status.system:set_model("video/character.glb"):bind_shader(0.0, status.outer.scene.light.shader)
 
 	-- load sound.
 	status.system:set_sound("audio/player/step_1.ogg")
@@ -153,14 +153,14 @@ function player:draw_3d(status)
 		camera_point = self.point + CAMERA_POINT * 0.5
 	end
 
-	self.camera_point:copy(self.camera_point + (camera_point - status.outer.camera_3d.point) * delta * CAMERA_SPEED)
+	self.camera_point:copy(self.camera_point + (camera_point - status.outer.scene.camera_3d.point) * delta * CAMERA_SPEED)
 
 	-- update the 3D camera.
-	status.outer.camera_3d.point:copy(self.camera_point + shake + CAMERA_POINT)
-	status.outer.camera_3d.focus:copy(self.camera_point + shake)
+	status.outer.scene.camera_3d.point:copy(self.camera_point + shake + CAMERA_POINT)
+	status.outer.scene.camera_3d.focus:copy(self.camera_point + shake)
 
 	-- update the 2D camera.
-	status.outer.camera_2d.shift:copy(shake * 16.0)
+	status.outer.scene.camera_2d.shift:copy(shake * 16.0)
 
 	-- draw hunter, weapon.
 	hunter:draw_3d(status)
@@ -193,7 +193,7 @@ function player:draw_2d(status)
 		self.speed.y = 32.0
 	end
 
-	--quiver.draw_2d.draw_text("the midnight rush", vector_2:old(8.0, 8.0), 32.0, color:red())
+	quiver.draw_2d.draw_text(quiver.general.get_frame_rate(), vector_2:old(8.0, 8.0), 32.0, color:red())
 end
 
 --[[----------------------------------------------------------------]]
@@ -212,7 +212,7 @@ function player:aim_2d(status)
 		return vector_2:old(axis_x, axis_y) * 256.0 + shape
 	else
 		-- return mouse point.
-		return vector_2:old(quiver.input.mouse.get_point()):scale_zoom(status.outer.camera_2d)
+		return vector_2:old(quiver.input.mouse.get_point()):scale_zoom(status.outer.scene.camera_2d)
 	end
 end
 
@@ -252,7 +252,7 @@ function player:aim(status)
 	-- get the view ray, from the point of the mouse.
 	aim_ray:pack(
 		quiver.draw_3d.get_screen_to_world(
-			status.outer.camera_3d,
+			status.outer.scene.camera_3d,
 			mouse,
 			shape
 		)

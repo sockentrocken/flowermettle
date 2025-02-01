@@ -39,10 +39,7 @@ function outer:new(status)
 	status.outer   = i
 
 	i.__type       = "outer"
-	i.camera_3d    = camera_3d:new(vector_3:new(16.0, 16.0, 16.0), vector_3:new(0.0, 0.0, 0.0),
-		vector_3:new(0.0, 1.0, 0.0),
-		90.0, CAMERA_3D_KIND.PERSPECTIVE)
-	i.camera_2d    = camera_2d:new(vector_2:new(0.0, 0.0), vector_2:new(0.0, 0.0), 0.0, 1.0)
+	i.scene        = scene:new(status.system:get_shader("light"))
 	i.time         = 0.0
 	i.step         = 0.0
 	i.entity       = {}
@@ -103,16 +100,16 @@ end
 ---@param entry? table  # The current entry.
 ---@param shape? table  # The current shape list.
 ---@param depth? number # The current recursion depth.
-function outer:create_level(status, level, entry, shape, depth)
+function outer:create_level(status, c_level, entry, shape, depth)
 	if not shape then
 		shape = {}
 	end
 
-	if depth and depth > 1.0 then
+	if depth and depth > 2.0 then
 		return false
 	end
 
-	level = table.copy(level)
+	c_level = table.copy(c_level)
 
 	local point = vector_3:old(0.0, 0.0, 0.0)
 	local angle = vector_3:old(0.0, 0.0, 0.0)
@@ -128,7 +125,7 @@ function outer:create_level(status, level, entry, shape, depth)
 		local index = nil
 
 		-- for each entity in the level...
-		for i, entity in ipairs(level.data) do
+		for i, entity in ipairs(c_level.data) do
 			-- find the table class.
 			local table_class = _G[entity.__type]
 
@@ -164,93 +161,13 @@ function outer:create_level(status, level, entry, shape, depth)
 			end
 		end
 
-		level.data[index].close = true
+		c_level.data[index].close = true
 	end
 
-	-- load model, bind to light shader.
-	local model = status.system:set_model(level.file)
-
-	-- check if level might be colliding with any other level.
-	local min_x, min_y, min_z, max_x, max_y, max_z = model:get_box_3()
-	local min = vector_3:old(min_x, min_y, min_z)
-	local max = vector_3:old(max_x, max_y, max_z)
-	local b_shape = (((min * -1.0) + max) * 0.5) * 0.99
-
-	for _, value in ipairs(shape) do
-		if self.rapier:test_intersect_cuboid_cuboid(point, angle, b_shape, value.point, value.angle, value.shape) then
-			return false
-		end
-	end
-
-	table.insert(shape, {
+	return level:new(status, {
 		point = vector_3:new(point.x, point.y, point.z),
 		angle = vector_3:new(angle.x, angle.y, angle.z),
-		shape = vector_3:new(b_shape.x, b_shape.y, b_shape.z),
-	})
-	table.insert(self.level_list, {
-		model = level.file,
-		point = vector_3:new(point.x, point.y, point.z),
-		angle = vector_3:new(angle.x, angle.y, angle.z),
-	})
-
-	model:bind_shader(1.0, status.light.shader)
-
-	-- for each mesh in the model...
-	for x = 0, model.mesh_count - 1.0 do
-		local vertex = model:mesh_vertex(x)
-
-		for i, v in ipairs(vertex) do
-			vertex[i] = vector_3:old(v.x, v.y, v.z)
-			vertex[i] = vertex[i]:rotate_vector_4(vector_4:from_euler(
-				angle.x,
-				angle.y,
-				angle.z
-			))
-			vertex[i].x = vertex[i].x + point.x
-			vertex[i].y = vertex[i].y + point.y
-			vertex[i].z = vertex[i].z + point.z
-		end
-
-		-- load the convex hull, and parent it to the level rigid body.
-		self.rapier:collider_builder_convex_hull(vertex, self.level_rigid)
-	end
-
-	-- for each entity in the level...
-	for _, entity in ipairs(level.data) do
-		-- find the table class.
-		local table_class = _G[entity.__type]
-
-		-- if table class is not nil...
-		if table_class then
-			table.restore_meta(entity)
-
-			-- if table class has a constructor...
-			if table_class.new then
-				-- apply point and angle to entity.
-				entity.point:copy(entity.point:rotate_vector_4(vector_4:from_euler(
-					angle.x,
-					angle.y,
-					angle.z
-				)))
-				entity.point.x = entity.point.x + point.x
-				entity.point.y = entity.point.y + point.y
-				entity.point.z = entity.point.z + point.z
-				entity.angle.x = entity.angle.x + math.radian_to_degree(angle.y)
-				entity.angle.y = entity.angle.y + math.radian_to_degree(angle.x)
-				entity.angle.z = entity.angle.z + math.radian_to_degree(angle.z)
-
-				table_class.new(table_class, status, entity, shape, depth)
-			else
-				-- error.
-				error("outer::new(): Entity \"" .. entity.__type .. "\" has no \"new\" constructor.")
-			end
-		else
-			-- error.
-			error("outer::new(): Entity \"" .. entity.__type .. "\" has no table-class.")
-		end
-	end
-
-	return true
+	}, c_level, shape, depth)
 end
 
 local ONE_TENTH = vector_3:new(0.1, 0.1, 0.1)
@@ -260,7 +177,7 @@ local COLOR_Z = color:new(0.0, 0.0, 255.0, 255.0)
 
 function outer:draw(status)
 	local shape = vector_2:old(quiver.window.get_shape())
-	self.camera_2d.zoom = math.clamp(0.25, 4.0, math.snap(0.25, shape.y / 320.0))
+	self.scene.camera_2d.zoom = math.clamp(0.25, 4.0, math.snap(0.25, shape.y / 320.0))
 
 	-- check if the lobby toggle button has been set off.
 	local _, which = ACTION_TOGGLE:press()
@@ -331,7 +248,7 @@ function outer:draw(status)
 		-- begin 3D view.
 		quiver.draw_3d.begin(function()
 			-- begin light frame.
-			status.light:begin(nil, self.camera_3d)
+			self.scene:begin(nil, self.scene.camera_3d)
 
 			-- run 3D logic for each entity.
 			for _, entity in pairs(self.entity) do
@@ -364,22 +281,10 @@ function outer:draw(status)
 				end
 			end
 
-			-- draw level.
-			for _, level in ipairs(self.level_list) do
-				local model = status.system:get_model(level.model)
-				model:draw_transform(level.point,
-					vector_3:old(
-						math.radian_to_degree(level.angle.x),
-						-math.radian_to_degree(level.angle.y),
-						math.radian_to_degree(level.angle.z)
-					),
-					vector_3:one(), color:white())
-			end
-
 			if quiver.input.board.get_down(INPUT_BOARD.TAB) then
-				self.rapier:debug_render()
+				do end --self.rapier:debug_render()
 			end
-		end, self.camera_3d)
+		end, self.scene.camera_3d)
 	end)
 
 	-- begin screen-space shader.
@@ -406,7 +311,7 @@ function outer:draw(status)
 				entity:draw_2d(status)
 			end
 		end
-	end, self.camera_2d)
+	end, self.scene.camera_2d)
 end
 
 --[[----------------------------------------------------------------]]

@@ -219,7 +219,7 @@ function weapon:draw_3d(status, side)
 		local color = COLOR_MUZZLE_FLASH * (self.fire_time / WEAPON_DATA[self.kind].fire_rate) * 2.0
 
 		-- draw a point light.
-		status.light:light_point(status.outer.player.point + cross, color)
+		status.outer.scene.light:light_point(status.outer.player.point + cross, color)
 	end
 
 	-- rotate the weapon around the player's aim.
@@ -233,7 +233,7 @@ end
 
 function weapon:draw_2d(status, side)
 	-- get the shape of the window.
-	local shape = vector_2:old(quiver.window.get_shape()):scale_zoom(status.outer.camera_2d)
+	local shape = vector_2:old(quiver.window.get_shape()):scale_zoom(status.outer.scene.camera_2d)
 
 	-- draw weapon plaque.
 	status.outer.player:draw_plaque(status, vector_2:old((shape.x - 108.0) * side, shape.y - 40.0), self.name,
@@ -257,7 +257,7 @@ end
 ---@param status status # The game status.
 ---@param side   number # The side on which the weapon is on. 0.0 for l. side, 1.0 for r. side.
 function weapon:use(status, side, input)
-	if self.ammo > 0.0 and self.fire_time == 0.0 and input:down() then
+	if self.ammo > 0.0 and self.fire_time == 0.0 and false then
 		-- get the other currently held weapon.
 		local side = side == 0.0 and
 			status.inner.weapon[status.outer.player.weapon[2]] or

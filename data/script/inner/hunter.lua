@@ -65,7 +65,7 @@ end
 
 function hunter:draw_2d(status)
 	-- get the shape of the window.
-	local shape = vector_2:old(quiver.window.get_shape()):scale_zoom(status.outer.camera_2d)
+	local shape = vector_2:old(quiver.window.get_shape()):scale_zoom(status.outer.scene.camera_2d)
 
 	-- draw weapon plaque.
 	status.outer.player:draw_plaque(status, vector_2:old(0.0, 0.0), self.name, self.health, self

@@ -13,12 +13,13 @@
 -- OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 -- PERFORMANCE OF THIS SOFTWARE.
 
+-- load standard library.
 require "data/script/base/base"
 
 ---@class status
 ---@field active boolean
 ---@field render render_texture
----@field system file_system
+---@field system system
 ---@field lobby  lobby
 ---@field inner  inner | nil
 ---@field outer  outer | nil
@@ -38,7 +39,7 @@ function status:new()
     i.active = true
     i.logger = logger:new()
     i.render = quiver.render_texture.new(vector_2:old(quiver.window.get_shape()) * 0.5)
-    i.system = file_system:new({
+    i.system = system:new({
         "data"
     })
 
@@ -56,6 +57,7 @@ function status:new()
     -- load outer-state source code.
     require(i.system:get_source("script/outer/outer.lua"))
     require(i.system:get_source("script/outer/entity.lua"))
+    require(i.system:get_source("script/outer/level.lua"))
     require(i.system:get_source("script/outer/entry.lua"))
     require(i.system:get_source("script/outer/actor.lua"))
     require(i.system:get_source("script/outer/enemy.lua"))
@@ -63,10 +65,11 @@ function status:new()
     require(i.system:get_source("script/outer/zombie.lua"))
     require(i.system:get_source("script/outer/particle.lua"))
     require(i.system:get_source("script/outer/projectile.lua"))
+    require(i.system:get_source("script/outer/path.lua"))
 
     i.system:set_shader("base", "video/shader/base.vs", "video/shader/base.fs")
+    i.system:set_shader("light", "video/shader/light.vs", "video/shader/light.fs")
 
-    i.light = light_manager:new(i.system:set_shader("light", "video/shader/light.vs", "video/shader/light.fs"))
     i.lobby = lobby:new(i)
 
     local level_list = i.system:list("level/")
