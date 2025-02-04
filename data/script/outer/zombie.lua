@@ -29,7 +29,7 @@ function zombie:new(status, previous)
 	i.__type = "zombie"
 
 	-- load model.
-	status.system:set_model("video/character.glb")
+	status.system:set_model("video/character.glb"):bind_shader(0.0, status.outer.scene.light.shader)
 
 	return i
 end

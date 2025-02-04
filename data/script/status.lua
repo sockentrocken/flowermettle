@@ -42,6 +42,10 @@ function status:new()
     i.system = system:new({
         "data"
     })
+    i.time = 0.0
+
+    quiver.window.set_icon(quiver.image.new("data/video/icon.png"))
+    quiver.window.set_name("FLOWERMETTLE")
 
     -- load inner-state source code.
     require(i.system:get_source("script/lobby/lobby.lua"))
@@ -57,6 +61,7 @@ function status:new()
     -- load outer-state source code.
     require(i.system:get_source("script/outer/outer.lua"))
     require(i.system:get_source("script/outer/entity.lua"))
+    require(i.system:get_source("script/outer/light.lua"))
     require(i.system:get_source("script/outer/level.lua"))
     require(i.system:get_source("script/outer/entry.lua"))
     require(i.system:get_source("script/outer/actor.lua"))
@@ -66,6 +71,7 @@ function status:new()
     require(i.system:get_source("script/outer/particle.lua"))
     require(i.system:get_source("script/outer/projectile.lua"))
     require(i.system:get_source("script/outer/path.lua"))
+    require(i.system:get_source("script/outer/text.lua"))
 
     i.system:set_shader("base", "video/shader/base.vs", "video/shader/dither.fs")
     i.system:set_shader("light", "video/shader/light.vs", "video/shader/light.fs")
@@ -89,7 +95,10 @@ function status:new()
             end
         end
 
-        if initial then
+        -- TO-DO: hack. remove.
+        if path == "level/tutorial.json" then
+            i.level.tutorial = file
+        elseif initial then
             table.insert(i.level.initial, file)
         else
             table.insert(i.level.regular, file)
@@ -102,6 +111,10 @@ end
 --[[----------------------------------------------------------------]]
 
 function status:draw()
+    local delta = quiver.general.get_frame_time()
+
+    self.time = self.time + delta
+
     -- clear table pool.
     table_pool:clear()
 

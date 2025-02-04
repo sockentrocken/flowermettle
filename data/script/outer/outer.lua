@@ -28,7 +28,7 @@ outer = {}
 ---Create a new outer state (in-game state).
 ---@param level string # The path to the game level.
 ---@return outer value # The outer state.
-function outer:new(status)
+function outer:new(status, tutorial)
 	local i = {}
 	setmetatable(i, {
 		__index = self
@@ -45,8 +45,9 @@ function outer:new(status)
 	i.entity       = {}
 	i.entity_index = 1.0
 	i.rapier       = quiver.rapier:new()
-	i.level_list   = {}
 	i.level_rigid  = i.rapier:rigid_body(0.0)
+
+	i.scene.light:set_base_color(color:old(33.0, 33.0, 33.0, 255.0))
 
 	--[[]]
 
@@ -56,14 +57,13 @@ function outer:new(status)
 		quiver.input.mouse.set_active(false)
 	end
 
-	quiver.input.mouse.set_scale(vector_2:old(1.0, 1.0))
-
 	-- reset layout. TO-DO: should probably be a method.
-	status.lobby.layout = 0.0
+	status.lobby.layout = 1.0
 	status.lobby.active = false
 
 	-- pick a random level out of the initial level pool.
-	local level = status.level.initial[math.random(1, table.hash_length(status.level.initial))]
+	local level = tutorial and
+		status.level.tutorial or status.level.initial[math.random(1, table.hash_length(status.level.initial))]
 
 	-- create the level.
 	i:create_level(status, level)
@@ -79,19 +79,6 @@ function outer:new(status)
 	collectgarbage("collect")
 
 	return i
-end
-
-function collision_box_box_3(box_a, box_b)
-	local collision = true;
-
-	if ((box_a.max.x >= box_b.min.x) and (box_a.min.x <= box_b.max.x)) then
-		if ((box_a.max.y <= box_b.min.y) or (box_a.min.y >= box_b.max.y)) then collision = false end;
-		if ((box_a.max.z <= box_b.min.z) or (box_a.min.z >= box_b.max.z)) then collision = false end;
-	else
-		collision = false
-	end;
-
-	return collision;
 end
 
 ---Recursively create a new level.
@@ -177,7 +164,6 @@ local COLOR_Z = color:new(0.0, 0.0, 255.0, 255.0)
 
 function outer:draw(status)
 	local shape = vector_2:old(quiver.window.get_shape())
-	self.scene.camera_2d.zoom = math.clamp(0.25, 4.0, math.snap(0.25, shape.y / 320.0))
 
 	-- check if the lobby toggle button has been set off.
 	local _, which = ACTION_TOGGLE:press()
@@ -282,9 +268,14 @@ function outer:draw(status)
 			end
 
 			if quiver.input.board.get_down(INPUT_BOARD.TAB) then
-				do end --self.rapier:debug_render()
+				self.rapier:debug_render()
 			end
 		end, self.scene.camera_3d)
+
+		--[[]]
+
+		-- clear table pool.
+		table_pool:clear()
 
 		-- run 3D logic for each entity.
 		for _, entity in pairs(self.entity) do
@@ -292,6 +283,21 @@ function outer:draw(status)
 				entity:render(status)
 			end
 		end
+
+		--[[]]
+
+		-- clear table pool.
+		table_pool:clear()
+
+		-- begin 2D view.
+		quiver.draw_2d.begin(function()
+			-- run 2D logic for each entity.
+			for _, entity in pairs(self.entity) do
+				if entity.draw_2d then
+					entity:draw_2d(status)
+				end
+			end
+		end, self.scene.camera_2d)
 	end)
 
 	-- begin screen-space shader.
@@ -304,21 +310,6 @@ function outer:draw(status)
 		-- draw 3D view, as render-texture.
 		status.render:draw_pro(render, window, vector_2:zero(), 0.0, color:white())
 	end)
-
-	--[[]]
-
-	-- clear table pool.
-	table_pool:clear()
-
-	-- begin 2D view.
-	quiver.draw_2d.begin(function()
-		-- run 2D logic for each entity.
-		for _, entity in pairs(self.entity) do
-			if entity.draw_2d then
-				entity:draw_2d(status)
-			end
-		end
-	end, self.scene.camera_2d)
 end
 
 --[[----------------------------------------------------------------]]

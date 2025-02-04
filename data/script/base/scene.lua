@@ -30,7 +30,7 @@ function scene:new(shader)
 	i.camera_3d = camera_3d:new(vector_3:new(0.0, 0.0, 0.0), vector_3:new(0.0, 0.0, 0.0), vector_3:new(0.0, 1.0, 0.0),
 		90.0, CAMERA_3D_KIND.PERSPECTIVE)
 	i.camera_2d = camera_2d:new(vector_2:new(0.0, 0.0), vector_2:new(0.0, 0.0), 0.0, 1.0)
-	i.light = light:new(shader)
+	i.light = light_manager:new(shader)
 	i.frustum = {
 		vector_4:new(0.0, 0.0, 0.0, 0.0),
 		vector_4:new(0.0, 0.0, 0.0, 0.0),
@@ -138,6 +138,16 @@ function scene:point_in_frustum(point)
 	return true
 end
 
+function scene:sphere_in_frustum(point, radius)
+	for _, plane in ipairs(self.frustum) do
+		if self:distance_to_plane(plane, point) < -radius then
+			return false
+		end
+	end
+
+	return true
+end
+
 function scene:box_3_in_frustum(shape)
 	local point = vector_3:old(0.0, 0.0, 0.0)
 
@@ -178,35 +188,34 @@ function scene:begin(call, camera_3d)
 	self.light:begin(call, camera_3d)
 end
 
-local LIGHT_MAXIMUM = 4.0
+local LIGHT_MAXIMUM = 32.0
 
----@class light
-light = {}
+---@class light_manager
+light_manager = {}
 
----Create a new light.
----@param shader shader # The light shader.
----@return light value # The light.
-function light:new(shader)
+---Create a new light_manager.
+---@param shader shader # The light_manager shader.
+---@return light_manager value # The light_manager.
+function light_manager:new(shader)
 	local i = {}
 	setmetatable(i, self)
 	getmetatable(i).__index = self
 
 	--[[]]
 
-	i.__type = "light"
+	i.__type = "light_manager"
 	i.shader = shader
-	i.point_list = {
-		light_instance:new(i, 0.0, true),
-		light_instance:new(i, 1.0, true),
-		light_instance:new(i, 2.0, true),
-		light_instance:new(i, 3.0, true)
-	}
-	i.focus_list = {
-		light_instance:new(i, 0.0, false),
-		light_instance:new(i, 1.0, false),
-		light_instance:new(i, 2.0, false),
-		light_instance:new(i, 3.0, false)
-	}
+	i.point_list = {}
+	i.focus_list = {}
+
+	for x = 0, LIGHT_MAXIMUM - 1.0 do
+		table.insert(i.point_list, light_instance:new(i, x, true))
+	end
+
+	for x = 0, LIGHT_MAXIMUM - 1.0 do
+		table.insert(i.focus_list, light_instance:new(i, x, false))
+	end
+
 	i.point_amount = 0.0
 	i.focus_amount = 0.0
 
@@ -222,7 +231,7 @@ function light:new(shader)
 	return i
 end
 
-function light:set_base_color(color)
+function light_manager:set_base_color(color)
 	local location = self.shader:get_location_name("base_color")
 	self.shader:set_shader_vector_4(location, vector_4:old(
 		color.r / 255.0,
@@ -232,7 +241,7 @@ function light:set_base_color(color)
 	))
 end
 
-function light:begin(call, camera_3d)
+function light_manager:begin(call, camera_3d)
 	local location = self.shader:get_location(11)
 	self.shader:set_shader_vector_3(location, camera_3d.point)
 	self.shader:set_shader_integer(self.point_amount_location, self.point_amount)
@@ -246,7 +255,7 @@ function light:begin(call, camera_3d)
 	self.focus_amount = 0.0
 end
 
-function light:light_point(point, color)
+function light_manager:light_point(point, color)
 	if self.point_amount < LIGHT_MAXIMUM then
 		self.point_amount = self.point_amount + 1.0
 
@@ -255,7 +264,7 @@ function light:light_point(point, color)
 	end
 end
 
-function light:light_focus(point, focus, color)
+function light_manager:light_focus(point, focus, color)
 	if self.focus_amount < LIGHT_MAXIMUM then
 		self.focus_amount = self.focus_amount + 1.0
 

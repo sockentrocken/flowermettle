@@ -13,27 +13,24 @@
 -- OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 -- PERFORMANCE OF THIS SOFTWARE.
 
----@class hunter
-hunter = {
-	__meta = {}
-}
+---@class light : entity
+light = entity:new()
 
----Create a new hunter.
+---Create a new light.
 ---@param status status # The game status.
----@return hunter value # The hunter.
-function hunter:new(status)
-	local i = {}
-	setmetatable(i, self.__meta)
+---@return light value # The light.
+function light:new(status, previous)
+	local i = entity:new(status, previous)
+	setmetatable(i, self)
 	getmetatable(i).__index = self
 
 	--[[]]
 
-	i.__type         = "hunter"
-	i.health         = 100.0
-	i.health_maximum = 100.0
+	i.__type = "light"
 
 	return i
 end
 
-function hunter:draw_2d(status)
+function light:draw_3d(status)
+	status.outer.scene.light:light_point(self.point, color:white())
 end

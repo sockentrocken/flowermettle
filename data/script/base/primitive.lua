@@ -821,8 +821,8 @@ end
 
 function ray:old(position, direction)
 	local i = ray_pool:get()
-	i.min = min
-	i.max = max
+	i.position = position
+	i.direction = direction
 	return i
 end
 
@@ -1270,6 +1270,7 @@ function table_pool:clear()
 	box_2_pool:begin()
 	box_3_pool:begin()
 	ray_pool:begin()
+	matrix_pool:begin()
 	camera_2d_pool:begin()
 	camera_3d_pool:begin()
 end

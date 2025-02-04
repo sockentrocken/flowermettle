@@ -54,11 +54,14 @@ function level:new(status, previous, c_level, shape, depth)
 		shape = vector_3:new(b_shape.x, b_shape.y, b_shape.z),
 	})
 
-	model:bind_shader(1.0, status.outer.scene.light.shader)
+	for x = 1, model.material_count - 1.0 do
+		model:bind_shader(x, status.outer.scene.light.shader)
+	end
 
 	-- for each mesh in the model...
 	for x = 0, model.mesh_count - 1.0 do
 		local vertex = model:mesh_vertex(x)
+		local index = model:mesh_index(x)
 
 		for k, v in ipairs(vertex) do
 			vertex[k] = vector_3:old(v.x, v.y, v.z)
@@ -72,8 +75,8 @@ function level:new(status, previous, c_level, shape, depth)
 			vertex[k].z = vertex[k].z + i.point.z
 		end
 
-		-- load the convex hull, and parent it to the level rigid body.
-		status.outer.rapier:collider_builder_convex_hull(vertex, status.outer.level_rigid)
+		-- load the tri-mesh, and parent it to the level rigid body.
+		status.outer.rapier:collider_builder_tri_mesh(vertex, index, status.outer.level_rigid)
 	end
 
 	local level_entity = {}

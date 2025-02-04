@@ -293,10 +293,24 @@ function math.bell_curve(value)
 	return math.euler ^ -value ^ 2
 end
 
-function math.bell_curve_clamp(value)
-	local percentage = math.value_from_percentage(-3.0, 3.0, value)
+function math.ease_interval(min_a, min_b, max_a, max_b, value)
+	if value >= min_a and value <= min_b then
+		value = math.percentage_from_value(min_a, min_b, value)
+		return (math.sin(value * math.pi + math.pi * 0.5) - 1.0) * 0.5 * -1.0
+	end
 
-	if percentage < -3.0 or percentage > 3.0 then return 0.0 end
+	if max_a and max_b then
+		if value >= max_a and value <= max_b then
+			value = math.percentage_from_value(max_a, max_b, value)
+			return (math.sin(value * math.pi - math.pi * 0.5) - 1.0) * 0.5 * -1.0
+		end
+	end
 
-	return math.bell_curve(percentage)
+	if value <= min_a or (max_b and value >= max_b) then
+		return 0.0
+	end
+
+	if value >= min_b and (max_a and value <= max_a or not max_a) then
+		return 1.0
+	end
 end

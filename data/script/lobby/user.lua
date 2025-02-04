@@ -16,24 +16,9 @@
 local USER_FILE = "user.json"
 
 ---@class user
----@field video_full       boolean
----@field video_reel       boolean
----@field video_frame      number
----@field video_shake      number
----@field video_light      number
----@field video_gamma      number
----@field video_glyph      number
----@field audio_sound      number
----@field audio_music      number
----@field input_pad_look   number
----@field input_pad_assist number
----@field input_pad_rumble number
----@field input_move_x_a   action
----@field input_move_x_b   action
----@field input_move_y_a   action
----@field input_move_y_b   action
----@field input_weapon_a   action
----@field input_weapon_b   action
+---@field video table
+---@field audio table
+---@field input table
 user = {
     __meta = {}
 }
@@ -78,43 +63,63 @@ function user:default(status)
 
     i.__type = "user"
 
-    --[[ video. ]]
-    i.video_full  = true
-    i.video_reel  = true
-    i.video_frame = 60.0
-    i.video_shake = 1.0
-    i.video_light = 0.0
-    i.video_gamma = 1.0
-    i.video_glyph = 0.0
+    i.video = {
+        full         = true,
+        frame        = 60.0,
+        field        = 90.0,
+        camera_shake = 1.0,
+        camera_walk  = 1.0,
+        camera_tilt  = 1.0,
+        light        = 0.0,
+        gamma        = 1.0,
+        glyph        = 0.0,
+    }
 
-    --[[ audio. ]]
-    i.audio_sound = 1.0
-    i.audio_music = 1.0
+    i.audio = {
+        sound = 1.0,
+        music = 1.0,
+    }
 
-    --[[ input. ]]
-    i.input_pad_look   = 1.0
-    i.input_pad_assist = 1.0
-    i.input_pad_rumble = 1.0
-    i.input_move_x_a   = action:new({
-        action_button:new(INPUT_DEVICE.BOARD, INPUT_BOARD.W)
-    })
-    i.input_move_x_b   = action:new({
-        action_button:new(INPUT_DEVICE.BOARD, INPUT_BOARD.S)
-    })
-    i.input_move_y_a   = action:new({
-        action_button:new(INPUT_DEVICE.BOARD, INPUT_BOARD.A)
-    })
-    i.input_move_y_b   = action:new({
-        action_button:new(INPUT_DEVICE.BOARD, INPUT_BOARD.D)
-    })
-    i.input_weapon_a   = action:new({
-        action_button:new(INPUT_DEVICE.MOUSE, INPUT_MOUSE.LEFT),
-        action_button:new(INPUT_DEVICE.PAD, INPUT_PAD.LEFT_TRIGGER_2)
-    })
-    i.input_weapon_b   = action:new({
-        action_button:new(INPUT_DEVICE.MOUSE, INPUT_MOUSE.RIGHT),
-        action_button:new(INPUT_DEVICE.PAD, INPUT_PAD.RIGHT_TRIGGER_2)
-    })
+    i.input = {
+        pad_stick           = 0.0,
+        pad_dead_zone_x     = 0.1,
+        pad_dead_zone_y     = 0.1,
+        pad_rumble          = 1.0,
+        mouse_sensitivity_x = 0.1,
+        mouse_sensitivity_y = 0.1,
+        move_x_a            = action:new({
+            action_button:new(INPUT_DEVICE.BOARD, INPUT_BOARD.W)
+        }),
+        move_x_b            = action:new({
+            action_button:new(INPUT_DEVICE.BOARD, INPUT_BOARD.S)
+        }),
+        move_y_a            = action:new({
+            action_button:new(INPUT_DEVICE.BOARD, INPUT_BOARD.A)
+        }),
+        move_y_b            = action:new({
+            action_button:new(INPUT_DEVICE.BOARD, INPUT_BOARD.D)
+        }),
+        lean_a              = action:new({
+            action_button:new(INPUT_DEVICE.BOARD, INPUT_BOARD.Q)
+        }),
+        lean_b              = action:new({
+            action_button:new(INPUT_DEVICE.BOARD, INPUT_BOARD.E)
+        }),
+        sprint              = action:new({
+            action_button:new(INPUT_DEVICE.BOARD, INPUT_BOARD.L_SHIFT)
+        }),
+        crouch              = action:new({
+            action_button:new(INPUT_DEVICE.BOARD, INPUT_BOARD.L_CONTROL)
+        }),
+        weapon_fire         = action:new({
+            action_button:new(INPUT_DEVICE.MOUSE, INPUT_MOUSE.LEFT)
+        }),
+        weapon_swap         = action:new({
+            action_button:new(INPUT_DEVICE.MOUSE, INPUT_MOUSE.RIGHT)
+        })
+    }
+
+    i.developer = true
 
     -- apply user data.
     i:apply(status)
@@ -135,16 +140,16 @@ function user:apply(status)
         quiver.window.set_state(WINDOW_FLAG.RESIZABLE, true)
     end
 
-    if self.video_full then
+    if self.video.full then
         -- set the shape of the window to be the same as the current monitor's shape.
         quiver.window.set_shape(vector_2:old(quiver.window.get_screen_shape(quiver.window.get_screen_focus())))
     end
 
     -- set full-screen mode.
-    quiver.window.set_state(WINDOW_FLAG.FULLSCREEN_MODE, self.video_full)
+    quiver.window.set_state(WINDOW_FLAG.FULLSCREEN_MODE, self.video.full)
 
     -- set frame rate.
-    quiver.general.set_frame_rate(self.video_frame)
+    quiver.general.set_frame_rate(self.video.frame)
 
     -- set exit key.
     quiver.general.set_exit_key(INPUT_BOARD.NULL)

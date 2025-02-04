@@ -13,13 +13,31 @@
 -- OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 -- PERFORMANCE OF THIS SOFTWARE.
 
-local PLAYER_AIM_LENGTH = 4096.0
-local PLAYER_AIM_HELPER = vector_3:new(0.0, 0.1, 0.0)
-local CAMERA_POINT      = vector_3:new(0.0, 16.0, 8.0)
-local CAMERA_SPEED      = 8.0
+local PLAYER_LEAN_SPEED             = 8.0
+local PLAYER_LEAN_DECREMENT         = 0.25
+local PLAYER_LEAN_INCREMENT         = 0.20
+local PLAYER_SPRINT_SPEED_INCREMENT = 4.0
+local PLAYER_SPRINT_SPEED_DECREMENT = 4.0
+local PLAYER_SPRINT_DECREMENT       = 0.15
+local PLAYER_SPRINT_INCREMENT       = 0.20
+local PLAYER_CROUCH_SPEED           = 8.0
+local PLAYER_WALK_SPEED             = 8.0
+local PLAYER_WALK_FORCE             = 0.1
+local PLAYER_TILT_FORCE             = -5.0
+local PLAYER_LEAN_FORCE             = 25.0
+local PLAYER_SPRINT_ZOOM            = 30.0
+local PLAYER_CROUCH_ZOOM            = 15.0
+local PLAYER_ANGLE_MIN              = -90.0
+local PLAYER_ANGLE_MAX              = 90.00
+local PLAYER_CHEVRON_POINT_MIN      = 12.0
+local PLAYER_CHEVRON_POINT_MAX      = 12.0
+local PLAYER_STEP_RANGE             = 2.50
+local PLAYER_STEP_DELAY             = 0.35
+
+--[[----------------------------------------------------------------]]
 
 ---@class player : actor
-player                  = actor:new()
+player = actor:new()
 
 ---Create a new player.
 ---@param status status # The game status.
@@ -31,30 +49,8 @@ function player:new(status, previous)
 
 	i.__type                = "player"
 
-	-- camera smooth point + camera shake.
-	i.camera_point          = vector_3:new(0.0, 0.0, 0.0)
-	i.camera_shake          = 0.0
-
-	-- current hunter + weapon selection.
-	i.hunter                = status.lobby.select_hunter
-	i.weapon                = status.lobby.select_weapon
-
-	-- current enemy count.
-	i.enemy_count           = 0.0
-
-	-- currently standing on floor.
-	i.step                  = 0.0
-
-	-- TO-DO
-	i.done                  = 0.0
-	i.fall                  = 0.0
-	i.jump                  = 0.0
-
 	-- associate us as the main player.
 	status.outer.player     = i
-
-	-- load model.
-	status.system:set_model("video/character.glb"):bind_shader(0.0, status.outer.scene.light.shader)
 
 	-- load sound.
 	status.system:set_sound("audio/player/step_1.ogg")
@@ -70,19 +66,28 @@ function player:new(status, previous)
 	status.system:set_sound("audio/player/land_1.ogg")
 	status.system:set_sound("audio/player/land_2.ogg")
 
-	-- load texture.
-	status.system:set_texture("video/cross.png")
-	status.system:set_texture("video/plaque.png")
+	status.system:set_texture("video/chevron.png")
+
+	i.lean_where = 0.0
+	i.lean_delay = 1.0
+	i.sprint_where = 0.0
+	i.sprint_delay = 1.0
+	i.crouch_where = 0.0
+	i.step_delay = 0.0
+	i.fall_scale = 0.0
+	i.sway = vector_2:new(0.0, 0.0)
 
 	return i
 end
 
 function player:tick(status, step)
-	local weapon_a = status.inner.weapon[self.weapon[1]]
-	local weapon_b = status.inner.weapon[self.weapon[2]]
 	local movement = vector_3:old(0.0, 0.0, 0.0)
 
-	if self.enemy_count > 0.0 then
+	local speed = self:get_speed()
+
+	if status.lobby.user.input.sprint:down() then
+		movement.x = speed
+	else
 		-- if the current device is pad...
 		if status.lobby.window.device == INPUT_DEVICE.PAD then
 			-- get l. stick input.
@@ -90,332 +95,287 @@ function player:tick(status, step)
 			movement.z = quiver.input.pad.get_axis_state(0.0, 1.0)
 		else
 			-- get digital input.
-			movement.z = status.lobby.user.input_move_y_a:down() and ACTOR_SPEED_MAX or movement.z
-			movement.z = status.lobby.user.input_move_y_b:down() and ACTOR_SPEED_MAX * -1.0 or movement.z
-			movement.x = status.lobby.user.input_move_x_a:down() and ACTOR_SPEED_MAX or movement.x
-			movement.x = status.lobby.user.input_move_x_b:down() and ACTOR_SPEED_MAX * -1.0 or movement.x
+			movement.z = status.lobby.user.input.move_y_a:down() and speed or movement.z
+			movement.z = status.lobby.user.input.move_y_b:down() and speed * -1.0 or movement.z
+			movement.x = status.lobby.user.input.move_x_a:down() and speed or movement.x
+			movement.x = status.lobby.user.input.move_x_b:down() and speed * -1.0 or movement.x
 		end
 	end
-
-	local floor = self.floor
 
 	local angle_x, _, angle_z = math.direction_from_euler(vector_3:old(self.angle.x, 0.0, 0.0))
 
 	movement = movement.x * angle_x + movement.z * angle_z
 
+	local speed = self.speed.y
+	local floor = self.floor
+
 	self:movement(status, step, movement:normalize(), movement:magnitude())
 
 	if self.floor and not floor then
-		if self.speed.y < -6.0 then
-			local sound = status.system:get_sound("audio/player/land_" .. math.random(1, 2) .. ".ogg")
-			sound:play()
-			self.fall = 1.0
-			self.jump = 0.0
+		if speed <= -10.0 then
+			self.fall_scale = 1.0
 		end
 	end
 
-	self.step = math.max(0.0, self.step - step)
-
-	if self.floor and vector_3:old(self.speed.x, 0.0, self.speed.z):magnitude() > 2.5 and self.step == 0.0 then
-		local sound = status.system:get_sound("audio/player/step_" .. math.random(1, 10) .. ".ogg")
-		sound:play()
-		self.step = self.step + 0.30
-	end
-
-	-- process weapon tick.
-	weapon_a:tick(status, step, 0.0)
-	weapon_b:tick(status, step, 1.0)
-
-	if self.enemy_count == 0.0 then
-		self.done = self.done + step
-	end
-
-	if self.done >= 1.0 then
-		status.lobby.active = true
-		status.outer.entity = {}
-		status.outer = nil
-	end
+	self:step(status, step)
+	self:fall(status, step)
+	self:lean(status, step)
+	self:sprint(status, step)
+	self:crouch(status, step)
 end
 
 function player:draw_3d(status)
-	local hunter         = status.inner.hunter[self.hunter]
-	local weapon_a       = status.inner.weapon[self.weapon[1]]
-	local weapon_b       = status.inner.weapon[self.weapon[2]]
-	local aim, magnitude = self:aim_3d(status)
-	local delta          = quiver.general.get_frame_time()
-	local shake          = vector_3:old(
-		math.random_sign(self.camera_shake * status.lobby.user.video_shake),
-		math.random_sign(self.camera_shake * status.lobby.user.video_shake),
-		math.random_sign(self.camera_shake * status.lobby.user.video_shake)
-	)
+	if quiver.input.board.get_press(INPUT_BOARD.F2) then
+		status.system:load()
 
-	-- decrement camera shake.
-	self.camera_shake    = math.max(0.0, self.camera_shake - delta * self.camera_shake * 8.0)
-	self.fall            = math.max(0.0, self.fall - delta * self.fall * 4.0)
-	self.jump            = math.max(0.0, self.jump - delta * self.jump * 4.0)
+		status.outer.rapier:rigid_body_remove(status.outer.level_rigid, true)
 
-	local camera_point   = nil
+		status.outer.level_rigid = status.outer.rapier:rigid_body(0.0)
 
-	-- update the player camera.
-	if status.outer.player.enemy_count > 0.0 then
-		camera_point = self.point + CAMERA_POINT + (aim * magnitude * 0.01)
-	else
-		camera_point = self.point + CAMERA_POINT * 0.5
+		for _, entity in pairs(status.outer.entity) do
+			if entity.__type == "level" then
+				local model = status.system:get_model(entity.model)
+
+				for x = 1, model.material_count - 1.0 do
+					model:bind_shader(x, status.outer.scene.light.shader)
+				end
+
+				-- for each mesh in the model...
+				for x = 0, model.mesh_count - 1.0 do
+					local vertex = model:mesh_vertex(x)
+					local index = model:mesh_index(x)
+
+					for k, v in ipairs(vertex) do
+						vertex[k] = vector_3:old(v.x, v.y, v.z)
+						vertex[k] = vertex[k]:rotate_vector_4(vector_4:from_euler(
+							entity.angle.x,
+							entity.angle.y,
+							entity.angle.z
+						))
+						vertex[k].x = vertex[k].x + entity.point.x
+						vertex[k].y = vertex[k].y + entity.point.y
+						vertex[k].z = vertex[k].z + entity.point.z
+					end
+
+					-- load the tri-mesh, and parent it to the level rigid body.
+					status.outer.rapier:collider_builder_tri_mesh(vertex, index, status.outer.level_rigid)
+				end
+			end
+		end
+
+		self:set_point(status, self.point + vector_3:old(0.0, 1.0, 0.0))
 	end
 
-	self.camera_point:copy(self.camera_point + (camera_point - status.outer.scene.camera_3d.point) * delta * CAMERA_SPEED)
+	local user = status.lobby.user
+	local delta = quiver.general.get_frame_time()
+	local speed = vector_3:old(self.speed.x, 0.0, self.speed.z)
+	local speed_magnitude = (speed:magnitude() / self:get_speed())
 
-	local fall = (math.sin((self.fall * math.pi * 2.0) + math.pi * 0.5) - 1.0) * 0.5 * 0.5
-	local jump = (math.sin((self.jump * math.pi * 2.0) + math.pi * 0.5) - 1.0) * 0.5 * 0.5 * -1.0
+	-- decrease scale.
+	self.fall_scale = math.max(0.0, self.fall_scale - self.fall_scale * delta * 4.0)
 
-	local angle_x, angle_y, angle_z = math.direction_from_euler(vector_3:old(
-		self.angle.x,
-		self.angle.y - (fall * 5.0) - (jump * 5.0),
-		self.angle.z))
+	-- fall animation.
+	local fall = (math.sin(self.fall_scale * math.pi * 2.0 + math.pi * 0.5) - 1.0) * 0.5 * 0.5
 
-	local shpee = vector_3:old(self.speed.x, 0.0, self.speed.z)
+	-- walk animation.
+	local walk = math.sin(quiver.general.get_time() * PLAYER_WALK_SPEED) * speed_magnitude *
+		PLAYER_WALK_FORCE * user.video.camera_walk
 
-	local camera_walk = vector_3:old(0.0, fall +
-		math.sin(quiver.general.get_time() * 8.0) * (shpee:magnitude() / 8.0) * 0.5, 0.0)
-	local camera_tilt = angle_y:rotate_axis_angle(angle_x, (angle_z:dot(shpee) / 8.0) * 0.05)
+	-- duck animation.
+	local crouch_sin = math.sin(quiver.general.get_time() * 8.0) * speed_magnitude *
+		(1.5 + self.sprint_where * 2.0 + self.crouch_where)
+	local crouch_cos = math.cos(quiver.general.get_time() * 4.0) * speed_magnitude *
+		(1.0 + self.sprint_where * 2.0 + self.crouch_where)
+	local crouch = 1.0 - self.crouch_where
+
+	local angle_x, angle_y, angle_z = math.direction_from_euler(self.angle +
+		vector_3:old(0.0, fall * 15.0 * -1.0 + crouch_sin, 0.0))
+
+	-- tilt + lean animation.
+	local tilt = (angle_z:dot(speed) / self:get_speed()) * PLAYER_TILT_FORCE * user.video.camera_tilt
+	local lean = self.lean_where * PLAYER_LEAN_FORCE
+	angle_y = angle_y:rotate_axis_angle(angle_x, math.degree_to_radian(tilt + lean + crouch_cos))
+	local lean = angle_z * self.lean_where * -1.0
+
+	-- get the final point of the camera.
+	local point = self.point + vector_3:old(0.0, fall + walk + crouch, 0.0) + lean
 
 	-- update the 3D camera.
-	status.outer.scene.camera_3d.point:copy(self.point + shake + camera_walk +
-		vector_3:old(0.0, 1.0 + math.sin(quiver.general.get_time()) * 0.1, 0.0))
-	status.outer.scene.camera_3d.focus:copy(self.point + shake + camera_walk +
-		vector_3:old(0.0, 1.0 + math.sin(quiver.general.get_time()) * 0.1, 0.0) + angle_x)
-	status.outer.scene.camera_3d.angle:copy(camera_tilt)
+	status.outer.scene.camera_3d.point:copy(point)
+	status.outer.scene.camera_3d.focus:copy(angle_x + point)
+	status.outer.scene.camera_3d.angle:copy(angle_y)
+	status.outer.scene.camera_3d.zoom = user.video.field +
+		(self.sprint_where * PLAYER_SPRINT_ZOOM) -
+		(self.crouch_where * PLAYER_CROUCH_ZOOM)
 
-	-- update the 2D camera.
-	status.outer.scene.camera_2d.shift:copy(shake * 32.0)
-
+	-- update player angle.
 	local mouse = vector_2:old(quiver.input.mouse.get_delta())
-	self.angle.x = self.angle.x - mouse.x * 0.1
-	self.angle.y = self.angle.y + mouse.y * 0.1
-
-	self.angle.y = math.clamp(-90.0, 90.0, self.angle.y)
+	self.angle.x = self.angle.x - mouse.x * status.lobby.user.input.mouse_sensitivity_x
+	self.angle.y = self.angle.y + mouse.y * status.lobby.user.input.mouse_sensitivity_y
+	self.angle.y = math.clamp(PLAYER_ANGLE_MIN, PLAYER_ANGLE_MAX, self.angle.y)
 end
 
 function player:draw_2d(status)
-	if self.enemy_count == 0.0 then
-		return
+	local shape         = vector_2:old(status.render.shape_x, status.render.shape_y)
+	local speed         = self.speed:magnitude() / self:get_speed()
+	local chevron       = status.system:get_texture("video/chevron.png")
+	local chevron_shape = vector_2:old(chevron.shape_x, chevron.shape_y)
+	local chevron_point = box_2:old(0.0, 0.0, chevron_shape.x, chevron_shape.y)
+	local chevron_range = PLAYER_CHEVRON_POINT_MIN + PLAYER_CHEVRON_POINT_MAX * speed
+	local color_a       = color:old(255.0, 255.0, 255.0, math.floor(255.0 * self.sprint_delay))
+	local color_b       = color:old(255.0, 255.0, 255.0, math.floor(255.0 * self.lean_delay))
+	local point         = vector_2:old(shape.x * 0.5, shape.y * 0.5)
+
+	chevron_shape       = chevron_shape * (1.0 - self.crouch_where * 0.50)
+	chevron_range       = chevron_range * (1.0 - self.crouch_where * 0.50)
+
+	chevron:draw_pro(chevron_point,
+		box_2:old(point.x, point.y + chevron_range, chevron_shape.x, chevron_shape.y),
+		chevron_shape * 0.5, 0.0000, color_a)
+
+	chevron:draw_pro(chevron_point,
+		box_2:old(point.x, point.y - chevron_range, chevron_shape.x, chevron_shape.y),
+		chevron_shape * 0.5, -180.0, color_a)
+
+	chevron:draw_pro(chevron_point,
+		box_2:old(point.x - chevron_range, point.y, chevron_shape.x, chevron_shape.y),
+		chevron_shape * 0.5, 90.000, color_b)
+
+	chevron:draw_pro(chevron_point,
+		box_2:old(point.x + chevron_range, point.y, chevron_shape.x, chevron_shape.y),
+		chevron_shape * 0.5, -90.00, color_b)
+
+	quiver.draw_2d.draw_circle(point, 2.0, color:white())
+
+	local box_a = box_2:old(8.0, shape.y - 36.0, 96.0, 28.0)
+	local box_b = box_2:old(box_a.x + 2.0, box_a.y + 2.0, box_a.width - 4.0, box_a.height - 4.0)
+	local box_c = box_2:old(box_b.x + 2.0, box_b.y + 2.0, box_b.width - 4.0, box_b.height - 4.0)
+
+	box_c.width = box_c.width * 1.0
+
+	local font = status.system:get_font("video/font_side.ttf")
+
+	local box_color_a = color:old(127.0, 127.0, 127.0, 255.0)
+	local box_color_b = box_color_a * 0.5
+	local box_color_c = box_color_a * 1.5
+
+	quiver.draw_2d.draw_box_2_round(box_a, 0.25, 4.0, box_color_a)
+	quiver.draw_2d.draw_box_2_round(box_b, 0.25, 4.0, box_color_b)
+	quiver.draw_2d.draw_box_2_round(box_c, 0.25, 4.0, box_color_c)
+
+	font:draw("100", vector_2:old(box_c.x + 4.0, box_c.y + 2.0), 20.0, 1.0, color:black())
+
+	if status.outer.time <= 2.0 then
+		quiver.draw_2d.draw_box_2(box_2:old(0.0, 0.0, shape.x, shape.y), vector_2:zero(), 0.0,
+			color:old(0.0, 0.0, 0.0, math.floor(255.0 * (1.0 - status.outer.time * 0.5))))
 	end
 
-	local hunter   = status.inner.hunter[self.hunter]
-	local weapon_a = status.inner.weapon[self.weapon[1]]
-	local weapon_b = status.inner.weapon[self.weapon[2]]
-	local average  = (weapon_a.miss_time + weapon_b.miss_time) * 0.5
+	if status.outer.time >= 2.0 and status.outer.time <= 8.0 then
+		local value = math.ease_interval(2.0, 4.0, 6.0, 8.0, status.outer.time)
 
-	local shape    = vector_2:old(quiver.window.get_shape()):scale_zoom(status.outer.scene.camera_2d) * 0.5
+		-- measure text.
+		local measure = vector_2:old(font:measure_text("Zone 1-1", 24.0, 1.0))
 
-	-- draw crosshair.
-	local cross    = status.system:get_texture("video/cross.png")
-	cross:draw(shape - (vector_2:old(cross.shape_x, cross.shape_y) * (1.0 + average) * 0.5), 0.0,
-		1.0 + average,
-		color:white())
+		font:draw("Zone 1-1", shape * 0.5 - vector_2:old(measure.x * 0.5, 64.0), 24.0, 1.0,
+			color:old(255.0, 255.0, 255.0, math.floor(255.0 * value)))
+	end
 
-	-- draw hunter, weapon.
-	hunter:draw_2d(status)
-	weapon_a:draw_2d(status, 0.0)
-	weapon_b:draw_2d(status, 1.0)
-end
-
-function player:render(status)
-	local weapon_a = status.inner.weapon[self.weapon[1]]
-	local weapon_b = status.inner.weapon[self.weapon[2]]
-
-	-- draw weapon.
-	weapon_a:render(status, 0.0)
-	weapon_b:render(status, 1.0)
+	font:draw(quiver.general.get_frame_rate(), vector_2:old(8.0, 8.0), 24.0, 1.0, color:white())
 end
 
 --[[----------------------------------------------------------------]]
 
----Get where the player's aim should be, in 2D space.
----@param status status # The game status.
----@return vector_2 value # The player's aim, in 2D space.
-function player:aim_2d(status)
-	-- if current device is pad...
-	if status.lobby.window.device == INPUT_DEVICE.PAD then
-		-- get l. stick input.
-		local axis_x = quiver.input.pad.get_axis_state(0.0, 2.0)
-		local axis_y = quiver.input.pad.get_axis_state(0.0, 3.0)
-		local shape = vector_2:old(quiver.window.get_render_shape()) * 0.5
+function player:step(status, step)
+	-- get the speed of the player, without the Y component.
+	local speed = vector_3:old(self.speed.x, 0.0, self.speed.z):magnitude()
 
-		return vector_2:old(axis_x, axis_y) * 256.0 + shape
-	else
-		-- return mouse point.
-		return vector_2:old(quiver.input.mouse.get_point()):scale_zoom(status.outer.scene.camera_2d)
+	-- decrease delay.
+	self.step_delay = math.max(0.0, self.step_delay - step)
+
+	-- if delay is 0.0, we are on the floor, and our speed is above the threshold...
+	if self.step_delay <= 0.0 and self.floor and speed >= PLAYER_STEP_RANGE then
+		-- get a random sound, and play it.
+		status.system:get_sound("audio/player/step_" .. math.random(1, 10) .. ".ogg"):play()
+		self.step_delay = PLAYER_STEP_DELAY
 	end
 end
 
----Get where the player's aim should be, in 3D space.
----@param status status # The game status.
----@return vector_3 value # The player's aim, in 3D space.
-function player:aim_3d(status)
-	local where = nil
-
-	-- TO-DO: normalize this so that the camera doesn't go farther on a higher resolution.
-
-	-- if current device is pad...
-	if status.lobby.window.device == INPUT_DEVICE.PAD then
-		-- get l. stick input.
-		local axis_x = quiver.input.pad.get_axis_state(0.0, 2.0)
-		local axis_y = quiver.input.pad.get_axis_state(0.0, 3.0)
-		where = vector_2:old(axis_x, axis_y) * 256.0
-	else
-		-- get mouse, render shape.
-		local mouse = vector_2:old(quiver.input.mouse.get_point())
-		local shape = vector_2:old(quiver.window.get_render_shape()) * 0.5
-		where = (mouse - shape)
-	end
-
-	return vector_3:old(where.x, 0.0, where.y):normalize(), where:magnitude()
+function player:fall(status, step)
 end
 
----Cast a ray into the world for an enemy.
----@param status status # The game status.
----@return vector_3 value # The player's aim, in 3D space.
-function player:aim(status)
-	-- get mouse point, construct ray.
-	local mouse = vector_2:old(quiver.input.mouse.get_point())
-	local shape = vector_2:old(quiver.window.get_render_shape())
-	local aim_ray = ray:zero()
+function player:lean(status, step)
+	if status.lobby.user.input.lean_a:down() then
+		local time = self:check_lean(status, step, 1.00) * self.lean_delay * -1.0
+		self.lean_where = self.lean_where + (time - self.lean_where) * step * PLAYER_LEAN_SPEED
+		self.lean_delay = math.max(0.0, self.lean_delay - step * PLAYER_LEAN_DECREMENT)
+	elseif status.lobby.user.input.lean_b:down() then
+		local time = self:check_lean(status, step, -1.0) * self.lean_delay
+		self.lean_where = self.lean_where + (time - self.lean_where) * step * PLAYER_LEAN_SPEED
+		self.lean_delay = math.max(0.0, self.lean_delay - step * PLAYER_LEAN_DECREMENT)
+	else
+		self.lean_where = self.lean_where - (self.lean_where * step) * PLAYER_LEAN_SPEED
+		self.lean_delay = math.min(1.0, self.lean_delay + step * PLAYER_LEAN_INCREMENT)
+	end
+end
 
-	-- get the view ray, from the point of the mouse.
-	aim_ray:pack(
-		quiver.draw_3d.get_screen_to_world(
-			status.outer.scene.camera_3d,
-			mouse,
-			shape
-		)
-	)
+function player:sprint(status, step)
+	if status.lobby.user.input.sprint:down() then
+		self.sprint_where = math.min(self.sprint_delay,
+			self.sprint_where + (1.0 - self.sprint_where) * step * PLAYER_SPRINT_SPEED_INCREMENT)
+		self.sprint_delay = math.max(0.0, self.sprint_delay - step * PLAYER_SPRINT_DECREMENT)
+	else
+		self.sprint_where = self.sprint_where - (self.sprint_where * step) * PLAYER_SPRINT_SPEED_DECREMENT
+		self.sprint_delay = math.min(1.0, self.sprint_delay + step * PLAYER_SPRINT_INCREMENT)
+	end
+end
 
-	-- cast ray, ignoring the level geometry.
-	local collider, time = status.outer.rapier:cast_ray(aim_ray, PLAYER_AIM_LENGTH, true, status.outer.level_rigid,
+function player:crouch(status, step)
+	if status.lobby.user.input.crouch:down() then
+		if self.shape.y == 1.0 then
+			self:set_shape(status, vector_3:old(0.5, 0.5, 0.5))
+			self:set_point(status, self.point - vector_3:old(0.0, 0.5, 0.0))
+		end
+
+		self.crouch_where = math.min(1.0,
+			self.crouch_where + (1.0 - self.crouch_where) * step * PLAYER_CROUCH_SPEED)
+	else
+		if self.shape.y == 0.5 then
+			local check = status.outer.rapier:test_intersect_cuboid(self.point + vector_3:old(0.0, 0.5, 0.0),
+				vector_3:zero(), vector_3:old(0.5, 1.0, 0.5), nil, self.collider)
+
+			if not check then
+				self:set_shape(status, vector_3:old(0.5, 1.0, 0.5))
+				self:set_point(status, self.point + vector_3:old(0.0, 0.5, 0.0))
+			end
+		end
+
+		if self.shape.y == 1.0 then
+			self.crouch_where = self.crouch_where - (self.crouch_where * step) * PLAYER_CROUCH_SPEED
+		end
+	end
+
+	local shader = status.system:get_shader("base")
+	shader:set_shader_decimal(shader:get_location_name("vignette"), self.crouch_where)
+end
+
+function player:check_lean(status, step, direction)
+	local point = self.point + vector_3:old(0.0, self.shape.y - self.crouch_where, 0.0)
+
+	local _, _, angle_z = math.direction_from_euler(self.angle)
+
+	local lean = angle_z * direction
+	local from = 1.0
+
+	local collider, time = status.outer.rapier:cast_ray(ray:old(point, lean), self.shape.x + 1.0, true, nil,
 		self.collider)
 
-	-- if collider is not nil...
 	if collider then
-		-- get the point of the collider.
-		local point = vector_3:old(status.outer.rapier:get_collider_translation(collider))
-
-		-- if collider is above/below player by a certain threshold...
-		if math.abs(point.y - self.point.y) >= 0.5 then
-			-- aim at center mass.
-			local point_min = (point - self.point):normalize()
-
-			-- cast ray from player to target.
-			local collider, time = status.outer.rapier:cast_ray(ray:new(self.point, point_min), PLAYER_AIM_LENGTH,
-				true, nil,
-				self.collider)
-
-			local data = status.outer.rapier:get_collider_user_data(collider)
-
-			-- if collider is not nil and collider is not the world (0.0 is world)...
-			if collider and not (data == 0.0) then
-				print("mid. hit")
-				-- return direction between player and collider, with a small epsilon to help with aiming.
-				return point_min + PLAYER_AIM_HELPER
-			end
-
-			--[[----------------------------------------------------------------]]
-			-- TO-DO: remove 0.5 hard-code, which is assuming EVERY projectile will have a size of 0.5.
-			--[[----------------------------------------------------------------]]
-
-			-- aim at center mass + add upper half.
-			local point_min = ((point + vector_3:old(0.0, 0.5, 0.0)) - self.point):normalize()
-
-			-- cast ray from player to target.
-			local collider, time = status.outer.rapier:cast_ray(ray:new(self.point, point_min), PLAYER_AIM_LENGTH,
-				true, nil,
-				self.collider)
-
-			local data = status.outer.rapier:get_collider_user_data(collider)
-
-			-- if collider is not nil and collider is not the world (0.0 is world)...
-			if collider and not (data == 0.0) then
-				print("upp. hit")
-				-- return direction between player and collider, with a small epsilon to help with aiming.
-				return point_min + PLAYER_AIM_HELPER
-			end
-		end
+		from = from * (time / (self.shape.x + 1.0))
 	end
 
-	-- no collider was hit, or collider was not above/below us.
-	return self:aim_3d(status)
+	return from
 end
 
--- TO-DO clean up, parm desc.
-function player:draw_plaque(status, point, label, value_min, value_max)
-	-- get texture, font.
-	local texture = status.system:get_texture("video/plaque.png")
-	local font = status.system:get_font("video/font_plaque.ttf")
-
-	-- texture data.
-	local panel_a = box_2:old(301.0, 0.0, 11.0, -16.0)
-	local panel_b = box_2:old(313.0, 0.0, 16.0, -16.0)
-	local panel_c = box_2:old(330.0, 0.0, 11.0, -16.0)
-	local main = box_2:old(0.0, 0.0, 108.0, 25.0)
-	local bar_a = box_2:old(109.0, 0.0, 50.0, 18.0)
-	local bar_b = box_2:old(160.0, 0.0, 50.0, 18.0)
-
-	local function draw_number_font(point, value)
-		local to_string = tostring(value)
-
-		local i = 0.0
-
-		if value < 10 then to_string = "0" .. to_string end
-		if value < 100 then to_string = "0" .. to_string end
-
-		for c in to_string:gmatch(".") do
-			local to_number = tonumber(c)
-
-			texture:draw_pro(box_2:old(211.0 + 9.0 * to_number, 0.0, 8.0, 10.0),
-				box_2:old(point.x + (7.0 * i), point.y, 8.0, 10.0), vector_2:zero(), 0.0, color:white())
-
-			i = i + 1.0
-		end
-	end
-
-	bar_b.width = bar_b.width * (value_min / value_max)
-
-	texture:draw_pro(main, box_2:old(point.x, point.y, main.width, main.height),
-		vector_2:zero(), 0.0, color:white())
-
-	texture:draw_pro(bar_a,
-		box_2:old(point.x + 43.0, point.y + (3.0), bar_a.width, bar_a.height),
-		vector_2:zero(), 0.0, color:white())
-
-	texture:draw_pro(bar_b,
-		box_2:old(point.x + 43.0, point.y + (3.0), bar_b.width, bar_b.height),
-		vector_2:zero(), 0.0,
-		color:white())
-
-	local size = font:measure_text(label, 14.0, 1.0)
-
-	texture:draw_pro(panel_a, box_2:old(point.x, point.y + main.height, panel_a.width, panel_a.height), vector_2:zero(),
-		0.0,
-		color:white())
-
-	local x = 0.0
-
-	while x < math.floor((size + 4.0) / panel_b.width) do
-		texture:draw_pro(panel_b,
-			box_2:old(point.x + panel_a.width + panel_b.width * x, point.y + main.height, panel_b.width, panel_b.height),
-			vector_2:zero(), 0.0,
-			color:white())
-
-		x = x + 1.0
-	end
-
-	texture:draw_pro(panel_c,
-		box_2:old(point.x + panel_a.width + panel_b.width * x, point.y + main.height, panel_c.width, panel_c.height),
-		vector_2:zero(),
-		0.0,
-		color:white())
-
-	font:draw(label, point + vector_2:old(8.0, main.height + 1.0), 14.0, 1.0, color:old(170.0, 255.0, 140.0, 255.0))
-
-	draw_number_font(vector_2:old(point.x + 17.0, point.y + (7.0)), value_min)
+function player:get_speed()
+	return ACTOR_SPEED_MAX * (1.0 - (self.crouch_where * 0.75)) * (1.0 + self.sprint_where * 0.75)
 end

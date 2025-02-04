@@ -66,6 +66,20 @@ function entity:set_point(status, point)
 	end
 end
 
+---Set the shape of the current entity, also setting the shape of the collider, if there is any.
+---@param status status   # The game status.
+---@param shape  vector_3 # The shape of the entity.
+function entity:set_shape(status, shape)
+	-- copy the given shape.
+	self.shape:copy(shape)
+
+	-- if collider is not nil...
+	if self.collider then
+		-- copy the given point to the collider.
+		status.outer.rapier:set_collider_shape_cuboid(self.collider, self.shape)
+	end
+end
+
 ---Attach a collider to the current entity.
 ---@param status status   # The game status.
 ---@param shape  vector_3 # The half-shape of the collider.
@@ -74,6 +88,7 @@ function entity:attach_collider(status, shape)
 	self.collider = status.outer.rapier:collider_builder_cuboid(shape)
 	status.outer.rapier:set_collider_translation(self.collider, self.point)
 	status.outer.rapier:set_collider_user_data(self.collider, self.index)
+	self.shape:copy(shape)
 end
 
 ---Detach a collider from the current entity.

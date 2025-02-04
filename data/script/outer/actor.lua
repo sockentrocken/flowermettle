@@ -13,15 +13,17 @@
 -- OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 -- PERFORMANCE OF THIS SOFTWARE.
 
-ACTOR_FRICTION     = 8.00
-ACTOR_VELOCITY     = 8.00
-ACTOR_GRAVITY      = 32.00
-ACTOR_FLOOR_HELPER = vector_3:new(0.0, -0.5, 0.0)
-ACTOR_SPEED_MAX    = 8.00
-ACTOR_SPEED_MIN    = 0.01
+local ACTOR_FRICTION     = 8.00
+local ACTOR_VELOCITY     = 8.00
+local ACTOR_GRAVITY      = 32.00
+local ACTOR_FLOOR_HELPER = vector_3:new(0.0, -0.5, 0.0)
+ACTOR_SPEED_MAX          = 8.00
+ACTOR_SPEED_MIN          = 0.01
+
+--[[----------------------------------------------------------------]]
 
 ---@class actor : entity
-actor              = entity:new()
+actor = entity:new()
 
 ---Create a new actor.
 ---@param status status # The game status.
@@ -47,8 +49,6 @@ function actor:new(status, previous)
 		i:attach_collider(status, vector_3:old(0.5, 1.0, 0.5))
 		i.character = status.outer.rapier:character_controller()
 	end
-
-	i.floor = false
 
 	return i
 end
@@ -84,41 +84,16 @@ function actor:movement(status, step, wish_where, wish_speed)
 			end
 		end
 
-		friction = wish_speed - self.speed:dot(wish_where)
+		friction = wish_speed - self.speed:magnitude()
 
 		if friction > 0.0 then
 			self.speed:copy(self.speed + wish_where * math.min(friction, ACTOR_VELOCITY * step * wish_speed))
-		end
-	else
-		local friction = 0.0
-
-		local ACTOR_AIR_VELOCITY = 2048.0
-		local ACTOR_AIR_THRESHOLD = 1.0 -- originally 30.0
-
-		self.speed.y = self.speed.y - (ACTOR_GRAVITY * step)
-
-		if wish_speed < ACTOR_AIR_THRESHOLD then
-			friction = wish_speed - self.speed:dot(wish_where)
-		else
-			friction = ACTOR_AIR_THRESHOLD - self.speed:dot(wish_where)
-		end
-
-		if friction > 0.0 then
-			self.speed:copy(self.speed + wish_where * math.min(friction, ACTOR_AIR_VELOCITY * wish_speed * step))
 		end
 	end
 
 	--[[]]
 
-	if self.floor then
-		self.speed.y = 0.0
-
-		if quiver.input.board.get_down(INPUT_BOARD.SPACE) then
-			self.speed.y = 8.0
-			self.jump = 1.0
-			self.fall = 0.0
-		end
-	end
+	self.speed.y = self.floor and 0.0 or self.speed.y - ACTOR_GRAVITY * step
 
 	-- if actor was on floor on the previous frame, add epsilon to verify we are still on floor. otherwise, use regular vertical speed.
 	local check = self.floor and self.speed + ACTOR_FLOOR_HELPER or self.speed
@@ -136,16 +111,13 @@ end
 ---@param source entity # The hurt source.
 ---@param damage number # The hurt damage.
 function actor:hurt(status, source, damage)
-	-- apply damage knockback.
-	self.speed:copy(self.speed + (self.point - source.point):normalize() * damage * 0.25)
-
 	-- spawn blood particle.
 	particle:new(status, nil, self.point, source.point - self.point, 1.0, vector_3:old(1.0, 0.0, 0.0), "blood")
 
 	-- decrement health.
 	self.health = self.health - damage
 
-	-- if health is below 0...
+	-- if health is below zero...
 	if self.health < 0.0 then
 		-- run kill method.
 		self:kill(status, source, damage)

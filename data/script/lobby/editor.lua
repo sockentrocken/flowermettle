@@ -48,6 +48,16 @@ local ENTITY_LIST = {
             )
         }
     },
+    light = {
+        data = {
+        },
+        help = {
+            box = box_3:new(
+                vector_3:new(-0.5, -0.5, -0.5),
+                vector_3:new(0.5, 0.5, 0.5)
+            )
+        }
+    },
     entry = {
         data = {
             entry_source = 0.0
@@ -81,6 +91,17 @@ local ENTITY_LIST = {
                 },
             }
         }
+    },
+    text = {
+        data = {
+            index = 0.0
+        },
+        help = {
+            box = box_3:new(
+                vector_3:new(-0.5, -0.5, -0.5),
+                vector_3:new(0.5, 0.5, 0.5)
+            )
+        }
     }
 }
 local ONE_TENTH = vector_3:new(0.1, 0.1, 0.1)
@@ -111,27 +132,30 @@ function editor:new(status)
 
     --[[]]
 
-    i.__type    = "editor"
+    i.__type = "editor"
 
     -- entity list.
-    i.entity    = {}
+    i.entity = {}
 
     -- entity snap amount.
-    i.snap      = 0.5
+    i.snap   = 0.5
 
     -- wire-frame view.
-    i.wire      = false
+    i.wire   = false
 
     -- scroll cache for create/re-load level, respectively.
-    i.scroll    = { { 0.0, 0.0 }, { 0.0, 0.0 } }
+    i.scroll = { { 0.0, 0.0 }, { 0.0, 0.0 } }
 
     -- currently active editor widget.
-    i.widget    = WIDGET_KIND.POINT
+    i.widget = WIDGET_KIND.POINT
 
-    -- editor 3D/2D camera view.
-    i.camera_3d = camera_3d:new(vector_3:new(8.0, 2.5, 0.0), vector_3:new(0.0, 2.0, 0.0), vector_3:new(0.0, 1.0, 0.0),
+    i.scene  = scene:new(status.system:get_shader("light"))
+
+    i.scene.light:set_base_color(color:old(255.0, 255.0, 255.0, 255.0))
+
+    i.scene.camera_3d = camera_3d:new(vector_3:new(4.0, 8.0, 0.0), vector_3:new(0.0, 0.0, 0.0),
+        vector_3:new(0.0, 1.0, 0.0),
         90.0, CAMERA_3D_KIND.PERSPECTIVE)
-    i.camera_2d = camera_2d:new(vector_2:new(0.0, 0.0), vector_2:new(0.0, 0.0), 0.0, 1.0)
 
     -- load texture.
     status.system:set_texture("video/editor/point.png")
@@ -146,10 +170,18 @@ function editor:new(status)
 end
 
 function editor:draw(status)
+    quiver.input.mouse.set_scale(vector_2:old(1.0, 1.0))
+
     -- draw 3D view.
-    quiver.draw_3d.begin(function() self:draw_3d(status) end, self.camera_3d)
+    quiver.draw_3d.begin(function()
+        self.scene.light:begin(nil, self.scene.camera_3d)
+
+        self.scene.light:set_base_color(color:old(255.0, 255.0, 255.0, 255.0))
+
+        self:draw_3d(status)
+    end, self.scene.camera_3d)
     -- draw 2D view.
-    quiver.draw_2d.begin(function() self:draw_2d(status) end, self.camera_2d)
+    quiver.draw_2d.begin(function() self:draw_2d(status) end, self.scene.camera_2d)
 end
 
 function editor:draw_3d(status)
@@ -238,7 +270,7 @@ function editor:pick_entity()
 
         -- get a ray from the camera.
         local hit_ray   = ray:old(vector_3:zero(), vector_3:zero())
-        hit_ray:pack(quiver.draw_3d.get_screen_to_world(self.camera_3d, mouse, shape))
+        hit_ray:pack(quiver.draw_3d.get_screen_to_world(self.scene.camera_3d, mouse, shape))
 
         for i, entity in ipairs(self.entity) do
             local locate = ENTITY_LIST[entity.__help.locate]
@@ -303,20 +335,20 @@ function editor:move_camera()
     -- move camera on the X and Z axis.
     if quiver.input.mouse.get_down(INPUT_MOUSE.RIGHT) then
         local x, y = quiver.input.mouse.get_delta()
-        x = x * MOUSE_SENSITIVITY
+        x = x * MOUSE_SENSITIVITY * -1.0
         y = y * MOUSE_SENSITIVITY
 
         -- move camera.
-        self.camera_3d.point:copy(self.camera_3d.point + vector_3:old(x, 0.0, y))
-        self.camera_3d.focus:copy(self.camera_3d.focus + vector_3:old(x, 0.0, y))
+        self.scene.camera_3d.point:copy(self.scene.camera_3d.point + vector_3:old(y, 0.0, x))
+        self.scene.camera_3d.focus:copy(self.scene.camera_3d.focus + vector_3:old(y, 0.0, x))
     end
 
     -- move camera on the Y axis.
     if quiver.input.board.get_down(INPUT_BOARD.L_SHIFT) then
         local _, wheel = quiver.input.mouse.get_wheel()
-        local look = (self.camera_3d.focus - self.camera_3d.point):normalize()
+        local look = (self.scene.camera_3d.focus - self.scene.camera_3d.point):normalize()
 
-        self.camera_3d.point:copy(self.camera_3d.point + look * wheel * 4.0)
+        self.scene.camera_3d.point:copy(self.scene.camera_3d.point + look * wheel * 4.0)
     end
 end
 
@@ -344,13 +376,14 @@ function editor:layout_select(status)
         function()
             for i, value in ipairs(status.system:list("video/level/")) do
                 if status.lobby:button(status, box_2:old(box_a.x + 8.0, box_a.y + 8.0 + (40.0 * (i - 1.0)), 320.0, 32.0), value) then
-                    status.system:set_model(value)
-                    self.file = value
+                    local model = status.system:set_model(value)
 
-                    -- update the camera.
-                    self.camera_3d.point = vector_3:new(0.0, 8.0, 4.0)
-                    self.camera_3d.focus = vector_3:new(0.0, 0.0, 0.0)
-                    self.camera_3d.zoom = 90.0
+                    -- load model.
+                    for x = 1, model.material_count - 1.0 do
+                        model:bind_shader(x, self.scene.light.shader)
+                    end
+
+                    self.file = value
                 end
             end
         end)
@@ -377,17 +410,18 @@ function editor:layout_select(status)
                         entity.__type = nil
                     end
 
-                    status.system:set_model(data.file)
+                    local model = status.system:set_model(data.file)
+
+                    -- load model.
+                    for x = 1, model.material_count - 1.0 do
+                        model:bind_shader(x, self.scene.light.shader)
+                    end
+
                     self.file = data.file
 
                     self.entity = data.data
 
                     table.restore_meta(self.entity)
-
-                    -- update the camera.
-                    self.camera_3d.point = vector_3:new(0.0, 8.0, 4.0)
-                    self.camera_3d.focus = vector_3:new(0.0, 0.0, 0.0)
-                    self.camera_3d.zoom = 90.0
                 end
             end
         end)
@@ -438,7 +472,7 @@ function editor:layout_main_bar(status)
         status.lobby.editor = editor:new(status)
     end
     if status.lobby:button(status, box_2:old(16.0 + (36.0 * 5.0), 16.0, 32.0, 32.0), "Exit|video/editor/exit.png") then
-        status.lobby.layout = 0.0
+        status.lobby.layout = 1.0
         status.lobby.editor = editor:new(status)
     end
     if status.lobby:button(status, box_2:old(16.0 + (36.0 * 6.0), 16.0, 32.0, 32.0), "Reload|video/editor/reload.png") then
@@ -475,8 +509,8 @@ function editor:layout_side_bar(status)
                 -- draw button for the creation of a new entity.
                 if status.lobby:button(status, box_2:old(box_a.x + 4.0, box_a.y + 4.0 + (36.0 * i), box_a.width - 8.0, 32.0), name) then
                     -- TO-DO this should really cast a ray from the camera view into the level.
-                    local point = self.camera_3d.point +
-                        (self.camera_3d.focus - self.camera_3d.point):normalize() * 8.0
+                    local point = self.scene.camera_3d.point +
+                        (self.scene.camera_3d.focus - self.scene.camera_3d.point):normalize() * 8.0
                     point = point:snap(self.snap)
 
                     -- create entity table, store a reference to the entity reference table entry, and make active.
@@ -535,13 +569,13 @@ function editor:widget_movement()
     local key_s = (quiver.input.board.get_press(INPUT_BOARD.S) or quiver.input.board.get_press_repeat(INPUT_BOARD.S))
     local key_d = (quiver.input.board.get_press(INPUT_BOARD.D) or quiver.input.board.get_press_repeat(INPUT_BOARD.D))
 
-    result.x = key_a and 1.0 * -1.0 or result.x
-    result.x = key_d and 1.0 or result.x
+    result.z = key_a and 1.0 or result.z
+    result.z = key_d and 1.0 * -1.0 or result.z
 
     _, result.y = quiver.input.mouse.get_wheel()
 
-    result.z = key_w and 1.0 * -1.0 or result.z
-    result.z = key_s and 1.0 or result.z
+    result.x = key_w and 1.0 * -1.0 or result.x
+    result.x = key_s and 1.0 or result.x
 
     return result
 end
@@ -689,6 +723,11 @@ function editor:entity_draw_3d(entity)
         quiver.draw_3d.draw_line(entity.point, z, COLOR_Z)
     end
 
+    if entity.__help.locate == "light" then
+        self.scene.light:light_point(entity.point,
+            color:red())
+    end
+
     -- draw bound box.
     quiver.draw_3d.draw_box_3(locate_box, entity_color)
 end
@@ -708,7 +747,7 @@ function editor:draw_entity_2d(status, entity)
     x       = x * 0.5
 
     -- get the 2D screen position for the 3D world position of the name.
-    point:set(quiver.draw_3d.get_world_to_screen(self.camera_3d,
+    point:set(quiver.draw_3d.get_world_to_screen(self.scene.camera_3d,
         entity.point + vector_3:old(0.0, locate.help.box.max.y + 0.5, 0.0), shape))
 
     -- center text.

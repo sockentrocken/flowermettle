@@ -32,11 +32,8 @@ function enemy:new(status, previous)
 end
 
 function enemy:frame(status)
-	status.outer.player.enemy_count = status.outer.player.enemy_count + 1.0
 end
 
 function enemy:kill(status, source, damage)
 	actor.kill(self, status, source, damage)
-
-	status.outer.player.enemy_count = status.outer.player.enemy_count - 1.0
 end

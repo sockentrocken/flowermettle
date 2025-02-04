@@ -13,27 +13,24 @@
 -- OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 -- PERFORMANCE OF THIS SOFTWARE.
 
----@class hunter
-hunter = {
-	__meta = {}
-}
+---@class text : entity
+text = entity:new()
 
----Create a new hunter.
+---Create a new text.
 ---@param status status # The game status.
----@return hunter value # The hunter.
-function hunter:new(status)
-	local i = {}
-	setmetatable(i, self.__meta)
+---@return text value # The text.
+function text:new(status, previous)
+	local i = entity:new(status, previous)
+	setmetatable(i, self)
 	getmetatable(i).__index = self
 
 	--[[]]
 
-	i.__type         = "hunter"
-	i.health         = 100.0
-	i.health_maximum = 100.0
+	i.__type = "text"
 
 	return i
 end
 
-function hunter:draw_2d(status)
+function text:draw_3d(status)
+	quiver.draw_3d.draw_cube(self.point, vector_3:one(), color:red())
 end

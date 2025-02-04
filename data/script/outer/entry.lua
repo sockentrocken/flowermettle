@@ -68,6 +68,8 @@ function entry:new(status, previous, shape, depth)
 end
 
 function entry:draw_3d(status)
+	do return end
+
 	quiver.draw_3d.draw_cube(self.point, vector_3:one(), color:green())
 
 	local model = status.system:get_model("video/entry.glb")
