@@ -81,6 +81,11 @@ function player:new(status, previous)
 end
 
 function player:tick(status, step)
+	--if status.outer.time <= 8.75 then
+	--	self:set_point(status, self.point + vector_3:old(0.0, step, 0.0))
+	--	return
+	--end
+
 	local movement = vector_3:old(0.0, 0.0, 0.0)
 
 	local speed = self:get_speed()
@@ -226,61 +231,67 @@ function player:draw_2d(status)
 	local color_b       = color:old(255.0, 255.0, 255.0, math.floor(255.0 * self.lean_delay))
 	local point         = vector_2:old(shape.x * 0.5, shape.y * 0.5)
 
-	chevron_shape       = chevron_shape * (1.0 - self.crouch_where * 0.50)
-	chevron_range       = chevron_range * (1.0 - self.crouch_where * 0.50)
+	if status.lobby.user.video.info_draw then
+		chevron_shape = chevron_shape * (1.0 - self.crouch_where * 0.50)
+		chevron_range = chevron_range * (1.0 - self.crouch_where * 0.50)
 
-	chevron:draw_pro(chevron_point,
-		box_2:old(point.x, point.y + chevron_range, chevron_shape.x, chevron_shape.y),
-		chevron_shape * 0.5, 0.0000, color_a)
+		chevron:draw_pro(chevron_point,
+			box_2:old(point.x, point.y + chevron_range, chevron_shape.x, chevron_shape.y),
+			chevron_shape * 0.5, 0.0000, color_a)
 
-	chevron:draw_pro(chevron_point,
-		box_2:old(point.x, point.y - chevron_range, chevron_shape.x, chevron_shape.y),
-		chevron_shape * 0.5, -180.0, color_a)
+		chevron:draw_pro(chevron_point,
+			box_2:old(point.x, point.y - chevron_range, chevron_shape.x, chevron_shape.y),
+			chevron_shape * 0.5, -180.0, color_a)
 
-	chevron:draw_pro(chevron_point,
-		box_2:old(point.x - chevron_range, point.y, chevron_shape.x, chevron_shape.y),
-		chevron_shape * 0.5, 90.000, color_b)
+		chevron:draw_pro(chevron_point,
+			box_2:old(point.x - chevron_range, point.y, chevron_shape.x, chevron_shape.y),
+			chevron_shape * 0.5, 90.000, color_b)
 
-	chevron:draw_pro(chevron_point,
-		box_2:old(point.x + chevron_range, point.y, chevron_shape.x, chevron_shape.y),
-		chevron_shape * 0.5, -90.00, color_b)
+		chevron:draw_pro(chevron_point,
+			box_2:old(point.x + chevron_range, point.y, chevron_shape.x, chevron_shape.y),
+			chevron_shape * 0.5, -90.00, color_b)
 
-	quiver.draw_2d.draw_circle(point, 2.0, color:white())
+		quiver.draw_2d.draw_circle(point, 2.0, color:white())
 
-	local box_a = box_2:old(8.0, shape.y - 36.0, 96.0, 28.0)
-	local box_b = box_2:old(box_a.x + 2.0, box_a.y + 2.0, box_a.width - 4.0, box_a.height - 4.0)
-	local box_c = box_2:old(box_b.x + 2.0, box_b.y + 2.0, box_b.width - 4.0, box_b.height - 4.0)
+		local box_a = box_2:old(8.0, shape.y - 36.0, 96.0, 28.0)
+		local box_b = box_2:old(box_a.x + 2.0, box_a.y + 2.0, box_a.width - 4.0, box_a.height - 4.0)
+		local box_c = box_2:old(box_b.x + 2.0, box_b.y + 2.0, box_b.width - 4.0, box_b.height - 4.0)
 
-	box_c.width = box_c.width * 1.0
+		box_c.width = box_c.width * 1.0
 
-	local font = status.system:get_font("video/font_side.ttf")
+		local font = status.system:get_font("video/font_side.ttf")
 
-	local box_color_a = color:old(127.0, 127.0, 127.0, 255.0)
-	local box_color_b = box_color_a * 0.5
-	local box_color_c = box_color_a * 1.5
+		local box_color_a = color:old(127.0, 127.0, 127.0, 255.0)
+		local box_color_b = box_color_a * 0.5
+		local box_color_c = box_color_a * 1.5
 
-	quiver.draw_2d.draw_box_2_round(box_a, 0.25, 4.0, box_color_a)
-	quiver.draw_2d.draw_box_2_round(box_b, 0.25, 4.0, box_color_b)
-	quiver.draw_2d.draw_box_2_round(box_c, 0.25, 4.0, box_color_c)
+		quiver.draw_2d.draw_box_2_round(box_a, 0.25, 4.0, box_color_a)
+		quiver.draw_2d.draw_box_2_round(box_b, 0.25, 4.0, box_color_b)
+		quiver.draw_2d.draw_box_2_round(box_c, 0.25, 4.0, box_color_c)
 
-	font:draw("100", vector_2:old(box_c.x + 4.0, box_c.y + 2.0), 20.0, 1.0, color:black())
+		font:draw("100", vector_2:old(box_c.x + 4.0, box_c.y + 2.0), 20.0, 1.0, color:black())
+
+		if status.outer.time >= 10.0 and status.outer.time <= 16.0 then
+			local value = math.ease_interval(10.0, 12.0, 14.0, 16.0, status.outer.time)
+
+			-- measure text.
+			local measure = vector_2:old(font:measure_text("Zone 1-1", 24.0, 1.0))
+
+			font:draw("Zone 1-1", shape * 0.5 - vector_2:old(measure.x * 0.5, 64.0), 24.0, 1.0,
+				color:old(255.0, 255.0, 255.0, math.floor(255.0 * value)))
+		end
+	end
 
 	if status.outer.time <= 2.0 then
 		quiver.draw_2d.draw_box_2(box_2:old(0.0, 0.0, shape.x, shape.y), vector_2:zero(), 0.0,
 			color:old(0.0, 0.0, 0.0, math.floor(255.0 * (1.0 - status.outer.time * 0.5))))
 	end
 
-	if status.outer.time >= 2.0 and status.outer.time <= 8.0 then
-		local value = math.ease_interval(2.0, 4.0, 6.0, 8.0, status.outer.time)
+	if status.lobby.user.video.frame_draw then
+		local font = status.system:get_font("video/font_side.ttf")
 
-		-- measure text.
-		local measure = vector_2:old(font:measure_text("Zone 1-1", 24.0, 1.0))
-
-		font:draw("Zone 1-1", shape * 0.5 - vector_2:old(measure.x * 0.5, 64.0), 24.0, 1.0,
-			color:old(255.0, 255.0, 255.0, math.floor(255.0 * value)))
+		font:draw(quiver.general.get_frame_rate(), vector_2:old(8.0, 8.0), 24.0, 1.0, color:white())
 	end
-
-	font:draw(quiver.general.get_frame_rate(), vector_2:old(8.0, 8.0), 24.0, 1.0, color:white())
 end
 
 --[[----------------------------------------------------------------]]

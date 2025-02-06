@@ -41,7 +41,7 @@ function actor:new(status, previous)
 	--[[]]
 
 	-- lift the entity up slightly so that they don't bleed into the ground, making them unable to move into another room.
-	i.point.y = i.point.y + 0.1
+	i.point.y = i.point.y + 0.01
 
 	-- if status is not nil...
 	if status then

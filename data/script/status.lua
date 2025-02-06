@@ -16,6 +16,12 @@
 -- load standard library.
 require "data/script/base/base"
 
+-- request:
+-- light flare
+-- water particle
+-- steam particle
+-- streak texture
+
 ---@class status
 ---@field active boolean
 ---@field render render_texture
@@ -50,7 +56,6 @@ function status:new()
     -- load inner-state source code.
     require(i.system:get_source("script/lobby/lobby.lua"))
     require(i.system:get_source("script/lobby/gizmo.lua"))
-    require(i.system:get_source("script/lobby/editor.lua"))
     require(i.system:get_source("script/lobby/user.lua"))
 
     -- load inner-state source code.
@@ -66,6 +71,7 @@ function status:new()
     require(i.system:get_source("script/outer/entry.lua"))
     require(i.system:get_source("script/outer/actor.lua"))
     require(i.system:get_source("script/outer/enemy.lua"))
+    require(i.system:get_source("script/outer/elevator.lua"))
     require(i.system:get_source("script/outer/player.lua"))
     require(i.system:get_source("script/outer/zombie.lua"))
     require(i.system:get_source("script/outer/particle.lua"))
@@ -75,8 +81,6 @@ function status:new()
 
     i.system:set_shader("base", "video/shader/base.vs", "video/shader/dither.fs")
     i.system:set_shader("light", "video/shader/light.vs", "video/shader/light.fs")
-
-    i.lobby = lobby:new(i)
 
     local level_list = i.system:list("level/")
 
@@ -96,7 +100,7 @@ function status:new()
         end
 
         -- TO-DO: hack. remove.
-        if path == "level/tutorial.json" then
+        if path == "level/_tutorial.json" then
             i.level.tutorial = file
         elseif initial then
             table.insert(i.level.initial, file)
@@ -104,6 +108,8 @@ function status:new()
             table.insert(i.level.regular, file)
         end
     end
+
+    lobby:new(i)
 
     return i
 end

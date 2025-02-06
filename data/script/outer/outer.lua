@@ -28,7 +28,7 @@ outer = {}
 ---Create a new outer state (in-game state).
 ---@param level string # The path to the game level.
 ---@return outer value # The outer state.
-function outer:new(status, tutorial)
+function outer:new(status)
 	local i = {}
 	setmetatable(i, {
 		__index = self
@@ -62,7 +62,7 @@ function outer:new(status, tutorial)
 	status.lobby.active = false
 
 	-- pick a random level out of the initial level pool.
-	local level = tutorial and
+	local level = status.lobby.user.tutorial and
 		status.level.tutorial or status.level.initial[math.random(1, table.hash_length(status.level.initial))]
 
 	-- create the level.

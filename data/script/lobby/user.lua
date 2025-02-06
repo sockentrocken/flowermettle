@@ -61,11 +61,18 @@ function user:default(status)
 
     --[[]]
 
-    i.__type = "user"
+    i.__type    = "user"
 
-    i.video = {
+    i.tutorial  = true
+    i.skip_menu = true
+    i.developer = true
+
+    i.video     = {
         full         = true,
-        frame        = 60.0,
+        info_draw    = true,
+        frame_draw   = false,
+        frame_lock   = true,
+        frame_rate   = 60.0,
         field        = 90.0,
         camera_shake = 1.0,
         camera_walk  = 1.0,
@@ -75,12 +82,12 @@ function user:default(status)
         glyph        = 0.0,
     }
 
-    i.audio = {
+    i.audio     = {
         sound = 1.0,
         music = 1.0,
     }
 
-    i.input = {
+    i.input     = {
         pad_stick           = 0.0,
         pad_dead_zone_x     = 0.1,
         pad_dead_zone_y     = 0.1,
@@ -119,8 +126,6 @@ function user:default(status)
         })
     }
 
-    i.developer = true
-
     -- apply user data.
     i:apply(status)
 
@@ -148,8 +153,12 @@ function user:apply(status)
     -- set full-screen mode.
     quiver.window.set_state(WINDOW_FLAG.FULLSCREEN_MODE, self.video.full)
 
-    -- set frame rate.
-    quiver.general.set_frame_rate(self.video.frame)
+    if self.video.frame_lock then
+        -- set frame rate.
+        quiver.general.set_frame_rate(self.video.frame_rate)
+    else
+        quiver.general.set_frame_rate(0.0)
+    end
 
     -- set exit key.
     quiver.general.set_exit_key(INPUT_BOARD.NULL)

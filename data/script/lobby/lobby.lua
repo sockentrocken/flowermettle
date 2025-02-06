@@ -43,9 +43,7 @@ local LOBBY_LAYOUT = {
 	SETUP = 2,
 	ABOUT = 3,
 	CLOSE = 4,
-	EDITOR = 5,
-	TRANSITION_STANDARD = 6,
-	TRANSITION_TUTORIAL = 7,
+	TRANSITION = 5,
 }
 local LOBBY_LAYOUT_CAMERA = {
 	[LOBBY_LAYOUT.INTRO] = {
@@ -68,11 +66,7 @@ local LOBBY_LAYOUT_CAMERA = {
 		point = vector_3:new(-1.5, 1.5, 3.0),
 		focus = vector_3:new(0.0, 0.5, 0.0)
 	},
-	[LOBBY_LAYOUT.TRANSITION_STANDARD] = {
-		point = vector_3:new(-1.5, 1.5, 3.0),
-		focus = vector_3:new(0.0, 0.5, 0.0)
-	},
-	[LOBBY_LAYOUT.TRANSITION_TUTORIAL] = {
+	[LOBBY_LAYOUT.TRANSITION] = {
 		point = vector_3:new(-1.5, 1.5, 3.0),
 		focus = vector_3:new(0.0, 0.5, 0.0)
 	}
@@ -80,7 +74,6 @@ local LOBBY_LAYOUT_CAMERA = {
 
 ---@class lobby
 ---@field active    	boolean
----@field editor    	editor
 ---@field window    	window
 ---@field user      	user
 ---@field camera_3d 	camera_3d
@@ -107,10 +100,11 @@ function lobby:new(status)
 
 	--[[]]
 
+	status.lobby   = i
+
 	i.__type       = "lobby"
 	i.scene        = scene:new(status.system:get_shader("light"))
 	i.active       = true
-	i.editor       = editor:new(status)
 	i.window       = window:new()
 	i.user         = user:new(status)
 	i.layout       = LOBBY_LAYOUT.INTRO
@@ -155,6 +149,11 @@ function lobby:new(status)
 	-- collect garbage.
 	collectgarbage("collect")
 
+	if i.user.skip_menu then
+		inner:new(status)
+		outer:new(status)
+	end
+
 	return i
 end
 
@@ -165,13 +164,6 @@ function lobby:draw(status)
 
 	-- update time in current layout.
 	self.time = self.time + delta
-
-	-- if current layout is editor...
-	if self.layout == LOBBY_LAYOUT.EDITOR then
-		-- draw editor.
-		self.editor:draw(status)
-		return
-	end
 
 	-- begin render-texture.
 	status.render:begin(function()
@@ -225,10 +217,8 @@ function lobby:draw(status)
 				self:layout_about(status)
 			elseif self.layout == LOBBY_LAYOUT.CLOSE then
 				self:layout_close(status)
-			elseif self.layout == LOBBY_LAYOUT.TRANSITION_STANDARD then
-				self:layout_transition(status, false)
-			elseif self.layout == LOBBY_LAYOUT.TRANSITION_TUTORIAL then
-				self:layout_transition(status, true)
+			elseif self.layout == LOBBY_LAYOUT.TRANSITION then
+				self:layout_transition(status)
 			end
 
 			-- close window.
@@ -312,12 +302,8 @@ function lobby:layout_begin(status)
 		self.active = false
 	end
 
-	if self:button(status, box_2:old(WINDOW_POINT.x, WINDOW_POINT.y + (WINDOW_SHAPE.y + 2.0) * y, WINDOW_SHAPE.x, WINDOW_SHAPE.y), "New Game") then
-		self:layout_change(LOBBY_LAYOUT.TRANSITION_STANDARD)
-	end; y = y + 1.0
-
-	if self:button(status, box_2:old(WINDOW_POINT.x, WINDOW_POINT.y + (WINDOW_SHAPE.y + 2.0) * y, WINDOW_SHAPE.x, WINDOW_SHAPE.y), "Tutorial") then
-		self:layout_change(LOBBY_LAYOUT.TRANSITION_TUTORIAL)
+	if self:button(status, box_2:old(WINDOW_POINT.x, WINDOW_POINT.y + (WINDOW_SHAPE.y + 2.0) * y, WINDOW_SHAPE.x, WINDOW_SHAPE.y), "Begin") then
+		self:layout_change(LOBBY_LAYOUT.TRANSITION)
 	end; y = y + 1.0
 
 	if self:button(status, box_2:old(WINDOW_POINT.x, WINDOW_POINT.y + (WINDOW_SHAPE.y + 2.0) * y, WINDOW_SHAPE.x, WINDOW_SHAPE.y), "Setup") then
@@ -330,10 +316,6 @@ function lobby:layout_begin(status)
 
 	if self:button(status, box_2:old(WINDOW_POINT.x, WINDOW_POINT.y + (WINDOW_SHAPE.y + 2.0) * y, WINDOW_SHAPE.x, WINDOW_SHAPE.y), "Close") then
 		self:layout_change(LOBBY_LAYOUT.CLOSE)
-	end; y = y + 1.0
-
-	if self:button(status, box_2:old(WINDOW_POINT.x, WINDOW_POINT.y + (WINDOW_SHAPE.y + 2.0) * y, WINDOW_SHAPE.x, WINDOW_SHAPE.y), "Editor") then
-		self:layout_change(LOBBY_LAYOUT.EDITOR)
 	end; y = y + 1.0
 end
 
@@ -361,6 +343,16 @@ function lobby:layout_setup(status)
 			WINDOW_POINT.x = WINDOW_POINT.x + 8.0
 			WINDOW_POINT.y = WINDOW_POINT.y + 8.0
 
+			self.user.tutorial = self:toggle(status,
+				box_2:old(WINDOW_POINT.x, WINDOW_POINT.y + (WINDOW_SHAPE.y + 2.0) * y, WINDOW_SHAPE.y, WINDOW_SHAPE.y),
+				"Tutorial",
+				self.user.tutorial); y = y + 1.0
+
+			self.user.skip_menu = self:toggle(status,
+				box_2:old(WINDOW_POINT.x, WINDOW_POINT.y + (WINDOW_SHAPE.y + 2.0) * y, WINDOW_SHAPE.y, WINDOW_SHAPE.y),
+				"Skip Menu",
+				self.user.skip_menu); y = y + 1.0
+
 			self.user.video.full, click = self:toggle(status,
 				box_2:old(WINDOW_POINT.x, WINDOW_POINT.y + (WINDOW_SHAPE.y + 2.0) * y, WINDOW_SHAPE.y, WINDOW_SHAPE.y),
 				"Full-Screen",
@@ -370,13 +362,32 @@ function lobby:layout_setup(status)
 				self.user:apply(status)
 			end
 
-			self.user.video.frame, click = self:slider(status,
-				box_2:old(WINDOW_POINT.x, WINDOW_POINT.y + (WINDOW_SHAPE.y + 2.0) * y, WINDOW_SHAPE.x, WINDOW_SHAPE.y),
-				"Frame Rate",
-				self.user.video.frame, 30.0, 300.0, 1.0); y = y + 1.0
+			self.user.video.info_draw = self:toggle(status,
+				box_2:old(WINDOW_POINT.x, WINDOW_POINT.y + (WINDOW_SHAPE.y + 2.0) * y, WINDOW_SHAPE.y, WINDOW_SHAPE.y),
+				"Draw Head-Up Display", self.user.video.info_draw); y = y + 1.0
+
+			self.user.video.frame_draw = self:toggle(status,
+				box_2:old(WINDOW_POINT.x, WINDOW_POINT.y + (WINDOW_SHAPE.y + 2.0) * y, WINDOW_SHAPE.y, WINDOW_SHAPE.y),
+				"Draw Frame Rate", self.user.video.frame_draw); y = y + 1.0
+
+			self.user.video.frame_lock, click = self:toggle(status,
+				box_2:old(WINDOW_POINT.x, WINDOW_POINT.y + (WINDOW_SHAPE.y + 2.0) * y, WINDOW_SHAPE.y, WINDOW_SHAPE.y),
+				"Frame Lock", self.user.video.frame_lock); y = y + 1.0
 
 			if click then
 				self.user:apply(status)
+			end
+
+			if self.user.video.frame_lock then
+				self.user.video.frame_rate, click = self:slider(status,
+					box_2:old(WINDOW_POINT.x, WINDOW_POINT.y + (WINDOW_SHAPE.y + 2.0) * y, WINDOW_SHAPE.x, WINDOW_SHAPE
+						.y),
+					"Frame Rate",
+					self.user.video.frame_rate, 30.0, 300.0, 1.0); y = y + 1.0
+
+				if click then
+					self.user:apply(status)
+				end
 			end
 
 			self.user.video.field = self:slider(status,
@@ -554,11 +565,9 @@ end
 
 ---Layout: level transition.
 ---@param status status # The status.
-function lobby:layout_transition(status, tutorial)
-	if tutorial then
-		inner:new(status)
-		outer:new(status, tutorial)
-	end
+function lobby:layout_transition(status)
+	--inner:new(status)
+	--outer:new(status)
 
 	local shape = vector_2:old(status.render.shape_x, status.render.shape_y)
 
@@ -567,7 +576,7 @@ function lobby:layout_transition(status, tutorial)
 
 	if self.time >= 2.0 then
 		inner:new(status)
-		outer:new(status, tutorial)
+		outer:new(status)
 	end
 end
 
@@ -1049,6 +1058,11 @@ end
 -- TO-DO
 function lobby:header_label(status, label)
 	local shape = vector_2:old(status.render.shape_x, status.render.shape_y)
+
+	quiver.draw_2d.draw_box_2_gradient_x(box_2:old(0.0, 0.0, shape.x * 0.25, shape.y),
+		color:old(0.0, 0.0, 0.0, 255.0),
+		color:old(0.0, 0.0, 0.0, 0.0)
+	)
 
 	local font = status.system:get_font("video/font_main.ttf")
 	font:draw(label, vector_2:old(8.0, 8.0), 48.0, 1.0, color:white())
